@@ -2,6 +2,11 @@
 
 A robust, scalable backend API service for AudioBook management built with TypeScript, Express.js, and Prisma.
 
+## Prerequisites
+
+- Node.js **26.4.0**
+- npm **11.17.0** (run `nvm use` / `fnm use` in this directory to match `.nvmrc`)
+
 ## 🚀 Quick Start
 
 ```bash
@@ -134,7 +139,7 @@ The API documentation is generated using a **code-first approach** with comprehe
 
 ## 📊 Tech Stack
 
-- **Runtime**: Node.js
+- **Runtime**: Node.js 26.4.0
 - **Framework**: Express.js
 - **Language**: TypeScript
 - **Database**: PostgreSQL with Prisma ORM
