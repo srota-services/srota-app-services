@@ -11,7 +11,9 @@ import {
    PlaybackControlRequest
 } from '../models/PlaybackDto';
 import { ApiError } from '../types/ApiError';
-import { ErrorType } from '../types/common';
+import { runInTransaction } from '../utils/prismaTransaction';
+import { rethrowServiceError } from '../utils/serviceError';
+import { MessageHandler } from '../utils/MessageHandler';
 
 export class PlaybackService {
    private playbackSessions: Map<string, PlaybackSession> = new Map();
@@ -100,8 +102,10 @@ export class PlaybackService {
          this.playbackSessions.set(sessionKey, session);
          return session;
       } catch (error) {
-         console.log('error', error);
-         throw new ApiError('Failed to initialize playback session', 500);
+         if (error instanceof ApiError) {
+            throw error;
+         }
+         rethrowServiceError(error, { operation: 'initializePlaybackSession' }, MessageHandler.getErrorMessage('internal.default'));
       }
    }
 
@@ -195,31 +199,18 @@ export class PlaybackService {
 
          // Update chapter progress if applicable
          if (currentSession.currentChapterId) {
-            await this.prisma.chapterProgress.upsert({
-               where: {
-                  userProfileId_chapterId: {
-                     userProfileId,
-                     chapterId: currentSession.currentChapterId,
-                  },
-               },
-               update: {
-                  currentPosition: position,
-                  lastListenedAt: new Date(),
-               },
-               create: {
-                  userProfileId,
-                  chapterId: currentSession.currentChapterId,
-                  currentPosition: position,
-                  lastListenedAt: new Date(),
-               },
-            });
+            await this.persistPlaybackProgress(
+               userProfileId,
+               currentSession.audiobookId,
+               currentSession.currentChapterId,
+               position,
+            );
          }
       } catch (error) {
-         console.log('error', error);
          if (error instanceof ApiError) {
             throw error;
          }
-         throw new ApiError('Failed to seek to position', 500);
+         rethrowServiceError(error, { operation: 'seekToPosition' }, MessageHandler.getErrorMessage('internal.default'));
       }
    }
 
@@ -238,32 +229,68 @@ export class PlaybackService {
       } as PlaybackState;
    }
 
+   private async persistPlaybackProgress(
+      userProfileId: string,
+      audiobookId: string,
+      chapterId: string | undefined,
+      currentPosition: number,
+   ): Promise<void> {
+      await runInTransaction(this.prisma, async (tx) => {
+         await tx.listeningHistory.upsert({
+            where: {
+               userProfileId_audiobookId: {
+                  userProfileId,
+                  audiobookId,
+               },
+            },
+            update: {
+               currentPosition,
+               lastListenedAt: new Date(),
+            },
+            create: {
+               userProfileId,
+               audiobookId,
+               currentPosition,
+               lastListenedAt: new Date(),
+            },
+         });
+
+         if (chapterId) {
+            await tx.chapterProgress.upsert({
+               where: {
+                  userProfileId_chapterId: {
+                     userProfileId,
+                     chapterId,
+                  },
+               },
+               update: {
+                  currentPosition,
+                  lastListenedAt: new Date(),
+               },
+               create: {
+                  userProfileId,
+                  chapterId,
+                  currentPosition,
+                  lastListenedAt: new Date(),
+               },
+            });
+         }
+      });
+   }
+
    /**
     * Update playback progress in database
     */
    private async updatePlaybackProgress(session: PlaybackSession): Promise<void> {
       try {
-         // Update listening history
-         await this.prisma.listeningHistory.upsert({
-            where: {
-               userProfileId_audiobookId: {
-                  userProfileId: session.userProfileId,
-                  audiobookId: session.audiobookId,
-               },
-            },
-            update: {
-               currentPosition: session.currentPosition,
-               lastListenedAt: new Date(),
-            },
-            create: {
-               userProfileId: session.userProfileId,
-               audiobookId: session.audiobookId,
-               currentPosition: session.currentPosition,
-               lastListenedAt: new Date(),
-            },
-         });
-      } catch (_error) {
-         // console.error('Failed to update playback progress:', _error);
+         await this.persistPlaybackProgress(
+            session.userProfileId,
+            session.audiobookId,
+            session.currentChapterId,
+            session.currentPosition,
+         );
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'updatePlaybackProgress' }, MessageHandler.getErrorMessage('internal.default'));
       }
    }
 
@@ -318,8 +345,8 @@ export class PlaybackService {
             totalChapters,
             completionPercentage: totalChapters > 0 ? (completedChapters / totalChapters) * 100 : 0,
          };
-      } catch (_error) {
-         throw new ApiError('Failed to retrieve playback statistics', 500);
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'getPlaybackStats' }, MessageHandler.getErrorMessage('internal.default'));
       }
    }
 
@@ -386,9 +413,11 @@ export class PlaybackService {
             volume: session.volume,
             userProfileId: session.userProfileId
          };
-      } catch (_error: any) {
-         // console.error('Playback control error:', error);
-         throw new ApiError('Failed to handle playback control', 500, ErrorType.INTERNAL_ERROR);
+      } catch (error) {
+         if (error instanceof ApiError) {
+            throw error;
+         }
+         rethrowServiceError(error, { operation: 'handlePlaybackControl' }, MessageHandler.getErrorMessage('internal.default'));
       }
    }
 
@@ -403,9 +432,8 @@ export class PlaybackService {
          if (session) {
             session.playbackSpeed = Math.max(0.5, Math.min(3.0, speed));
          }
-      } catch (_error: any) {
-         // console.error('Change playback speed error:', error);
-         throw new ApiError('Failed to change playback speed', 500, ErrorType.INTERNAL_ERROR);
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'changePlaybackSpeed' }, MessageHandler.getErrorMessage('internal.default'));
       }
    }
 
@@ -423,9 +451,8 @@ export class PlaybackService {
          } else {
             await this.initializePlaybackSession(userProfileId, audiobookId, chapterId);
          }
-      } catch (_error: any) {
-         // console.error('Navigate to chapter error:', error);
-         throw new ApiError('Failed to navigate to chapter', 500, ErrorType.INTERNAL_ERROR);
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'navigateToChapter' }, MessageHandler.getErrorMessage('internal.default'));
       }
    }
 

@@ -18,6 +18,7 @@ import { MessageHandler } from '../utils/MessageHandler';
 import { HttpStatusCode, ErrorType } from '../types/common';
 import { fileUrlService } from './FileUrlService';
 import { emitCacheInvalidation } from './DomainEventPublisher';
+import { runWrite } from '../utils/prismaTransaction';
 
 export class CommentService {
    constructor(private prisma: PrismaClient) {}
@@ -77,10 +78,12 @@ export class CommentService {
          createData.meta = metaJson;
       }
 
-      const comment = await this.prisma.comment.create({
-         data: createData,
-         include: commentUserInclude,
-      });
+      const comment = await runWrite(this.prisma, async (tx) =>
+         tx.comment.create({
+            data: createData,
+            include: commentUserInclude,
+         }),
+      );
 
       emitCacheInvalidation('comment', 'created', comment.id, { audiobookId: data.audiobookId });
       return this.hydrateCommentRecord(comment);
@@ -193,11 +196,13 @@ export class CommentService {
          );
       }
 
-      const updated = await this.prisma.comment.update({
-         where: { id },
-         data: updateData,
-         include: commentUserInclude,
-      });
+      const updated = await runWrite(this.prisma, async (tx) =>
+         tx.comment.update({
+            where: { id },
+            data: updateData,
+            include: commentUserInclude,
+         }),
+      );
 
       emitCacheInvalidation('comment', 'updated', id, { audiobookId: existing.audiobookId });
       return this.hydrateCommentRecord(updated);
@@ -216,7 +221,7 @@ export class CommentService {
          throw ApiError.forbidden(MessageHandler.getErrorMessage('comments.access_denied'));
       }
 
-      await this.prisma.comment.delete({ where: { id } });
+      await runWrite(this.prisma, async (tx) => tx.comment.delete({ where: { id } }));
       emitCacheInvalidation('comment', 'deleted', id, { audiobookId: existing.audiobookId });
    }
 

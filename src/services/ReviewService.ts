@@ -13,6 +13,7 @@ import { ApiError } from '../types/ApiError';
 import { MessageHandler } from '../utils/MessageHandler';
 import { HttpStatusCode, ErrorType } from '../types/common';
 import { emitCacheInvalidation } from './DomainEventPublisher';
+import { runWrite } from '../utils/prismaTransaction';
 
 export class ReviewService {
    constructor(private prisma: PrismaClient) {}
@@ -57,13 +58,15 @@ export class ReviewService {
          );
       }
 
-      const review = await this.prisma.review.create({
-         data: {
-            userProfileId,
-            audiobookId: data.audiobookId,
-            rating: data.rating,
-         },
-      });
+      const review = await runWrite(this.prisma, async (tx) =>
+         tx.review.create({
+            data: {
+               userProfileId,
+               audiobookId: data.audiobookId,
+               rating: data.rating,
+            },
+         }),
+      );
 
       emitCacheInvalidation('review', 'created', review.id, { audiobookId: data.audiobookId });
       return toReviewDto(review);
@@ -127,10 +130,12 @@ export class ReviewService {
          throw ApiError.forbidden(MessageHandler.getErrorMessage('reviews.access_denied'));
       }
 
-      const updated = await this.prisma.review.update({
-         where: { id },
-         data: { rating: data.rating },
-      });
+      const updated = await runWrite(this.prisma, async (tx) =>
+         tx.review.update({
+            where: { id },
+            data: { rating: data.rating },
+         }),
+      );
 
       emitCacheInvalidation('review', 'updated', id, { audiobookId: existing.audiobookId });
       return toReviewDto(updated);
@@ -149,7 +154,7 @@ export class ReviewService {
          throw ApiError.forbidden(MessageHandler.getErrorMessage('reviews.access_denied'));
       }
 
-      await this.prisma.review.delete({ where: { id } });
+      await runWrite(this.prisma, async (tx) => tx.review.delete({ where: { id } }));
       emitCacheInvalidation('review', 'deleted', id, { audiobookId: existing.audiobookId });
    }
 }

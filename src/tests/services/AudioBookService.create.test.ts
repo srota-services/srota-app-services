@@ -71,9 +71,9 @@ describe('AudioBookService.createAudioBook validation and persistence', () => {
       mockTransaction.mockImplementation(async (arg: unknown) => {
          if (typeof arg === 'function') {
             return arg({
-               audioBook: { create: mockCreate },
-               audioBookGenre: { createMany: mockGenreCreateMany },
-               audioBookTag: { createMany: mockTagCreateMany },
+               audioBook: { create: mockCreate, delete: mockDeleteAudiobook },
+               audioBookGenre: { createMany: mockGenreCreateMany, deleteMany: mockDeleteManyGenres },
+               audioBookTag: { createMany: mockTagCreateMany, deleteMany: mockDeleteManyTags },
             });
          }
 

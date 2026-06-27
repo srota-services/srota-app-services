@@ -4,6 +4,7 @@
 import { PrismaClient } from '@prisma/client';
 import { BookmarkService } from '../../services/BookmarkService';
 import { HttpStatusCode } from '../../types/common';
+import { attachPrismaTransaction } from '../helpers/prismaMock';
 
 jest.mock('../../utils/MessageHandler', () => ({
    MessageHandler: {
@@ -28,7 +29,7 @@ describe('BookmarkService chapter-only bookmarks', () => {
    let service: BookmarkService;
 
    beforeEach(() => {
-      prisma = {
+      prisma = attachPrismaTransaction({
          chapter: { findUnique: jest.fn() },
          bookmark: {
             findUnique: jest.fn(),
@@ -36,7 +37,7 @@ describe('BookmarkService chapter-only bookmarks', () => {
             findMany: jest.fn(),
             count: jest.fn(),
          },
-      };
+      });
       service = new BookmarkService(prisma as unknown as PrismaClient);
    });
 

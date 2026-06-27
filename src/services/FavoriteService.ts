@@ -12,6 +12,7 @@ import { ApiError } from '../types/ApiError';
 import { MessageHandler } from '../utils/MessageHandler';
 import { HttpStatusCode, ErrorType } from '../types/common';
 import { emitCacheInvalidation } from './DomainEventPublisher';
+import { runWrite } from '../utils/prismaTransaction';
 
 export class FavoriteService {
    constructor(private prisma: PrismaClient) {}
@@ -44,12 +45,14 @@ export class FavoriteService {
          );
       }
 
-      const favorite = await this.prisma.favorite.create({
-         data: {
-            userProfileId,
-            audiobookId: data.audiobookId,
-         },
-      });
+      const favorite = await runWrite(this.prisma, async (tx) =>
+         tx.favorite.create({
+            data: {
+               userProfileId,
+               audiobookId: data.audiobookId,
+            },
+         }),
+      );
 
       emitCacheInvalidation('favorite', 'created', favorite.id);
       return toFavoriteDto(favorite);
@@ -112,7 +115,7 @@ export class FavoriteService {
          throw ApiError.forbidden(MessageHandler.getErrorMessage('favorites.access_denied'));
       }
 
-      await this.prisma.favorite.delete({ where: { id } });
+      await runWrite(this.prisma, async (tx) => tx.favorite.delete({ where: { id } }));
       emitCacheInvalidation('favorite', 'deleted', id);
    }
 }

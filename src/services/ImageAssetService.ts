@@ -10,6 +10,7 @@ import { StorageFactory } from './storage/StorageFactory';
 import { fileUrlService } from './FileUrlService';
 import { mediaCleanupService } from './MediaCleanupService';
 import { APP_PRIMARY_VARIANT_KEYS } from '../constants/imagePlaceholderSpecs';
+import { runInTransaction, runWrite } from '../utils/prismaTransaction';
 
 async function writeBufferToTempFile(buffer: Buffer, suffix: string): Promise<string> {
    const tempPath = path.join(os.tmpdir(), `source-image-${Date.now()}${suffix}`);
@@ -48,7 +49,9 @@ export class ImageAssetService {
          await mediaCleanupService.deleteStoredFile(asset.storageKey);
       }
 
-      await this.prisma.imageAsset.deleteMany({ where: { category, entityId } });
+      await runWrite(this.prisma, async (tx) =>
+         tx.imageAsset.deleteMany({ where: { category, entityId } }),
+      );
    }
 
    async validateUploadSource(category: ImageCategory, sourcePath: string): Promise<void> {
@@ -61,7 +64,13 @@ export class ImageAssetService {
       sourcePath: string
    ): Promise<GenerateVariantsResult> {
       await this.specService.validateUpload(category, sourcePath);
-      await this.deleteAssetsForEntity(category, entityId);
+
+      const existingAssets = await this.prisma.imageAsset.findMany({
+         where: { category, entityId },
+      });
+      for (const asset of existingAssets) {
+         await mediaCleanupService.deleteStoredFile(asset.storageKey);
+      }
 
       const specs = await this.specService.getSpecsByCategory(category);
       const isDevelopment = config.NODE_ENV === 'development';
@@ -73,6 +82,12 @@ export class ImageAssetService {
 
       const variants: Record<string, string> = {};
       const tempFiles: string[] = [];
+      const upsertPayloads: Array<{
+         variantKey: string;
+         storageKey: string;
+         width: number;
+         height: number;
+      }> = [];
 
       try {
          for (const spec of specs) {
@@ -99,29 +114,41 @@ export class ImageAssetService {
                variants[spec.variantKey] = storageKey;
             }
 
-            await this.prisma.imageAsset.upsert({
-               where: {
-                  category_entityId_variantKey: {
-                     category,
-                     entityId,
-                     variantKey: spec.variantKey,
-                  },
-               },
-               update: {
-                  storageKey: variants[spec.variantKey]!,
-                  width: spec.actualWidth,
-                  height: spec.actualHeight,
-               },
-               create: {
-                  category,
-                  entityId,
-                  variantKey: spec.variantKey,
-                  storageKey: variants[spec.variantKey]!,
-                  width: spec.actualWidth,
-                  height: spec.actualHeight,
-               },
+            upsertPayloads.push({
+               variantKey: spec.variantKey,
+               storageKey: variants[spec.variantKey]!,
+               width: spec.actualWidth,
+               height: spec.actualHeight,
             });
          }
+
+         await runInTransaction(this.prisma, async (tx) => {
+            await tx.imageAsset.deleteMany({ where: { category, entityId } });
+            for (const payload of upsertPayloads) {
+               await tx.imageAsset.upsert({
+                  where: {
+                     category_entityId_variantKey: {
+                        category,
+                        entityId,
+                        variantKey: payload.variantKey,
+                     },
+                  },
+                  update: {
+                     storageKey: payload.storageKey,
+                     width: payload.width,
+                     height: payload.height,
+                  },
+                  create: {
+                     category,
+                     entityId,
+                     variantKey: payload.variantKey,
+                     storageKey: payload.storageKey,
+                     width: payload.width,
+                     height: payload.height,
+                  },
+               });
+            }
+         });
       } finally {
          for (const file of tempFiles) {
             if (fs.existsSync(file)) {

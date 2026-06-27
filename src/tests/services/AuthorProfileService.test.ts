@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { AuthorProfileService } from '../../services/AuthorProfileService';
+import { attachPrismaTransaction } from '../helpers/prismaMock';
 
 jest.mock('../../services/FileUrlService', () => ({
    fileUrlService: {
@@ -28,13 +29,13 @@ describe('AuthorProfileService', () => {
    };
 
    beforeEach(() => {
-      mockPrisma = {
+      mockPrisma = attachPrismaTransaction({
          authorProfile: {
             findUnique: jest.fn(),
             create: jest.fn(),
             update: jest.fn(),
          },
-      };
+      });
       service = new AuthorProfileService(mockPrisma as unknown as PrismaClient);
    });
 

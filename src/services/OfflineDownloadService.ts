@@ -15,6 +15,9 @@ import { BackgroundJobService } from './BackgroundJobService';
 import { emitCacheInvalidation } from './DomainEventPublisher';
 import { ApiError } from '../types/ApiError';
 import { fileUrlService } from './FileUrlService';
+import { runWrite } from '../utils/prismaTransaction';
+import { rethrowServiceError } from '../utils/serviceError';
+import { MessageHandler } from '../utils/MessageHandler';
 
 export class OfflineDownloadService {
    private backgroundJobService: BackgroundJobService;
@@ -62,14 +65,16 @@ export class OfflineDownloadService {
          }
 
          // Create download record
-         const download = await this.prisma.offlineDownload.create({
-            data: {
-               userProfileId,
-               audiobookId: downloadRequest.audiobookId,
-               status: 'PENDING',
-               progress: 0,
-            },
-         });
+         const download = await runWrite(this.prisma, async (tx) =>
+            tx.offlineDownload.create({
+               data: {
+                  userProfileId,
+                  audiobookId: downloadRequest.audiobookId,
+                  status: 'PENDING',
+                  progress: 0,
+               },
+            }),
+         );
 
          // Schedule download job
          await this.backgroundJobService.scheduleOfflineDownload(
@@ -196,8 +201,8 @@ export class OfflineDownloadService {
          });
 
          return Promise.all(downloads.map(download => this.mapOfflineDownloadWithRelations(download)));
-      } catch (_error) {
-         throw new ApiError('Failed to retrieve user downloads', 500);
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'getUserDownloads' }, MessageHandler.getErrorMessage('internal.default'));
       }
    }
 
@@ -279,12 +284,14 @@ export class OfflineDownloadService {
             throw new ApiError('Download is already cancelled', 400);
          }
 
-         await this.prisma.offlineDownload.update({
-            where: { id: downloadId },
-            data: {
-               status: 'CANCELLED',
-            },
-         });
+         await runWrite(this.prisma, async (tx) =>
+            tx.offlineDownload.update({
+               where: { id: downloadId },
+               data: {
+                  status: 'CANCELLED',
+               },
+            }),
+         );
       } catch (error) {
          if (error instanceof ApiError) {
             throw error;
@@ -319,9 +326,11 @@ export class OfflineDownloadService {
             console.log(`Would delete file: ${download.filePath}`);
          }
 
-         await this.prisma.offlineDownload.delete({
-            where: { id: downloadId },
-         });
+         await runWrite(this.prisma, async (tx) =>
+            tx.offlineDownload.delete({
+               where: { id: downloadId },
+            }),
+         );
          emitCacheInvalidation('offline-download', 'deleted', downloadId);
       } catch (error) {
          if (error instanceof ApiError) {
@@ -356,15 +365,17 @@ export class OfflineDownloadService {
          }
 
          // Reset download status
-         await this.prisma.offlineDownload.update({
-            where: { id: downloadId },
-            data: {
-               status: 'PENDING',
-               progress: 0,
-               errorMessage: null,
-               retryCount: download.retryCount + 1,
-            },
-         });
+         await runWrite(this.prisma, async (tx) =>
+            tx.offlineDownload.update({
+               where: { id: downloadId },
+               data: {
+                  status: 'PENDING',
+                  progress: 0,
+                  errorMessage: null,
+                  retryCount: download.retryCount + 1,
+               },
+            }),
+         );
 
          // Schedule retry
          await this.backgroundJobService.scheduleOfflineDownload(
@@ -403,8 +414,8 @@ export class OfflineDownloadService {
             failed,
             total,
          };
-      } catch (_error) {
-         throw new ApiError('Failed to retrieve download queue status', 500);
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'getDownloadQueueStatus' }, MessageHandler.getErrorMessage('internal.default'));
       }
    }
 
@@ -453,8 +464,8 @@ export class OfflineDownloadService {
                count: d._count.status,
             })),
          };
-      } catch (_error) {
-         throw new ApiError('Failed to retrieve download statistics', 500);
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'getDownloadStats' }, MessageHandler.getErrorMessage('internal.default'));
       }
    }
 
@@ -463,12 +474,14 @@ export class OfflineDownloadService {
     */
    async updateOfflineAvailability(audiobookId: string, isAvailable: boolean): Promise<void> {
       try {
-         await this.prisma.audioBook.update({
-            where: { id: audiobookId },
-            data: { isOfflineAvailable: isAvailable },
-         });
-      } catch (_error) {
-         throw new ApiError('Failed to update offline availability', 500);
+         await runWrite(this.prisma, async (tx) =>
+            tx.audioBook.update({
+               where: { id: audiobookId },
+               data: { isOfflineAvailable: isAvailable },
+            }),
+         );
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'updateOfflineAvailability' }, MessageHandler.getErrorMessage('internal.default'));
       }
    }
 

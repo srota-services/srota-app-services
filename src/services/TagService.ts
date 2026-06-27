@@ -8,6 +8,8 @@ import { ApiError } from '../types/ApiError';
 import { MessageHandler } from '../utils/MessageHandler';
 import { HttpStatusCode, ErrorType } from '../types/common';
 import { emitCacheInvalidation } from './DomainEventPublisher';
+import { runWrite } from '../utils/prismaTransaction';
+import { rethrowServiceError } from '../utils/serviceError';
 
 export class TagService {
    private prisma: PrismaClient;
@@ -29,12 +31,8 @@ export class TagService {
          });
 
          return tags.map(tag => toTagDto(tag));
-      } catch (_error) {
-         throw new ApiError(
-            MessageHandler.getErrorMessage('tags.fetch_failed'),
-            HttpStatusCode.INTERNAL_SERVER_ERROR,
-            ErrorType.INTERNAL_ERROR
-         );
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'getAllTags' }, MessageHandler.getErrorMessage('tags.fetch_failed'));
       }
    }
 
@@ -102,11 +100,13 @@ export class TagService {
             );
          }
 
-         const tag = await this.prisma.tag.create({
-            data: {
-               name: trimmedName
-            }
-         });
+         const tag = await runWrite(this.prisma, async (tx) =>
+            tx.tag.create({
+               data: {
+                  name: trimmedName
+               }
+            }),
+         );
 
          emitCacheInvalidation('tag', 'created', tag.id);
          return toTagDto(tag);
@@ -180,12 +180,14 @@ export class TagService {
             }
          }
 
-         const tag = await this.prisma.tag.update({
-            where: { id },
-            data: {
-               ...(updateTagDto.name && { name: updateTagDto.name.trim() })
-            }
-         });
+         const tag = await runWrite(this.prisma, async (tx) =>
+            tx.tag.update({
+               where: { id },
+               data: {
+                  ...(updateTagDto.name && { name: updateTagDto.name.trim() })
+               }
+            }),
+         );
 
          emitCacheInvalidation('tag', 'updated', id);
          return toTagDto(tag);
@@ -230,9 +232,7 @@ export class TagService {
          }
 
          // Delete the tag (cascade delete will handle AudioBookTag relationships)
-         await this.prisma.tag.delete({
-            where: { id }
-         });
+         await runWrite(this.prisma, async (tx) => tx.tag.delete({ where: { id } }));
          emitCacheInvalidation('tag', 'deleted', id);
       } catch (error) {
          if (error instanceof ApiError) {

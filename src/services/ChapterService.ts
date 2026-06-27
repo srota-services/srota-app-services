@@ -31,6 +31,9 @@ import {
 import { SubscriptionAccessService, subscriptionAccessService } from './SubscriptionAccessService';
 import { SubscriptionGatingMode } from '@prisma/client';
 import { SubscriptionAccessDto } from '../models/SubscriptionAccessDto';
+import { runWrite } from '../utils/prismaTransaction';
+import { rethrowServiceError, logServiceError } from '../utils/serviceError';
+import { MessageHandler } from '../utils/MessageHandler';
 
 export class ChapterService {
    private fileUploadService: FileUploadService;
@@ -106,8 +109,8 @@ export class ChapterService {
             ),
             totalCount
          };
-      } catch (_error) {
-         throw new ApiError('Failed to retrieve chapters', 500);
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'getChaptersByAudiobookId' }, MessageHandler.getErrorMessage('internal.default'));
       }
    }
 
@@ -215,9 +218,11 @@ export class ChapterService {
             createData.isActive = chapterData.isActive ?? true; // Default to true if not provided
          }
 
-         let chapter = await this.prisma.chapter.create({
-            data: createData,
-         });
+         let chapter = await runWrite(this.prisma, async (tx) =>
+            tx.chapter.create({
+               data: createData,
+            }),
+         );
 
          if (coverImagePath) {
             try {
@@ -226,12 +231,14 @@ export class ChapterService {
                   chapter.id,
                   coverImagePath,
                );
-               chapter = await this.prisma.chapter.update({
-                  where: { id: chapter.id },
-                  data: { coverImage: primaryStorageKey },
-               });
+               chapter = await runWrite(this.prisma, async (tx) =>
+                  tx.chapter.update({
+                     where: { id: chapter.id },
+                     data: { coverImage: primaryStorageKey },
+                  }),
+               );
             } catch (variantError: unknown) {
-               await this.prisma.chapter.delete({ where: { id: chapter.id } });
+               await runWrite(this.prisma, async (tx) => tx.chapter.delete({ where: { id: chapter.id } }));
                const message = variantError instanceof Error ? variantError.message : 'Invalid chapter cover image';
                throw new ApiError(message, 400);
             }
@@ -243,24 +250,28 @@ export class ChapterService {
                   uploadedFile,
                   '/uploads/chapters'
                );
-               chapter = await this.prisma.chapter.update({
-                  where: { id: chapter.id },
-                  data: {
-                     filePath: uploadResult.filePath,
-                     fileSize: BigInt(uploadResult.fileSize),
-                     sourceUploadStatus: 'ready',
-                     sourceUploadError: null,
-                  },
-               });
+               chapter = await runWrite(this.prisma, async (tx) =>
+                  tx.chapter.update({
+                     where: { id: chapter.id },
+                     data: {
+                        filePath: uploadResult.filePath,
+                        fileSize: BigInt(uploadResult.fileSize),
+                        sourceUploadStatus: 'ready',
+                        sourceUploadError: null,
+                     },
+                  }),
+               );
             } catch (uploadError: unknown) {
                const message = uploadError instanceof Error ? uploadError.message : 'Upload failed';
-               await this.prisma.chapter.update({
-                  where: { id: chapter.id },
-                  data: {
-                     sourceUploadStatus: 'failed',
-                     sourceUploadError: message,
-                  },
-               });
+               await runWrite(this.prisma, async (tx) =>
+                  tx.chapter.update({
+                     where: { id: chapter.id },
+                     data: {
+                        sourceUploadStatus: 'failed',
+                        sourceUploadError: message,
+                     },
+                  }),
+               );
                throw new ApiError(`Failed to upload chapter audio: ${message}`, 500);
             }
          }
@@ -272,20 +283,16 @@ export class ChapterService {
          // Schedule audiobook duration calculation job
          if (this.backgroundJobService) {
             try {
-               console.log(`Scheduling duration calculation for audiobook ${chapter.audiobookId}`);
                await this.backgroundJobService.scheduleAudiobookDurationCalculation(chapter.audiobookId);
-            } catch (_error) {
-               // Log error but don't fail chapter creation
-               console.error(`Error scheduling duration calculation for audiobook ${chapter.audiobookId}:`, _error);
+            } catch (error) {
+               logServiceError(error, { operation: 'createChapter.scheduleDuration' });
             }
 
-            // Schedule activation job if scheduledAt was provided
             if (chapterData.scheduledAt !== undefined) {
                try {
                   await this.backgroundJobService.scheduleActivationJob('chapter', chapter.id, chapterData.scheduledAt);
-               } catch (_error) {
-                  // Log error but don't fail chapter creation
-                  console.error(`Error scheduling activation job for chapter ${chapter.id}:`, _error);
+               } catch (error) {
+                  logServiceError(error, { operation: 'createChapter.scheduleActivation' });
                }
             }
          }
@@ -394,10 +401,12 @@ export class ChapterService {
             updatePayload.minSubscriptionTier = resolvedTier;
          }
 
-         let chapter = await this.prisma.chapter.update({
-            where: { id: chapterId },
-            data: updatePayload,
-         });
+         let chapter = await runWrite(this.prisma, async (tx) =>
+            tx.chapter.update({
+               where: { id: chapterId },
+               data: updatePayload,
+            }),
+         );
 
          if (hasAudioUpload && uploadedFile) {
             try {
@@ -405,15 +414,17 @@ export class ChapterService {
                   uploadedFile,
                   '/uploads/chapters'
                );
-               chapter = await this.prisma.chapter.update({
-                  where: { id: chapterId },
-                  data: {
-                     filePath: uploadResult.filePath,
-                     fileSize: BigInt(uploadResult.fileSize),
-                     sourceUploadStatus: 'ready',
-                     sourceUploadError: null,
-                  },
-               });
+               chapter = await runWrite(this.prisma, async (tx) =>
+                  tx.chapter.update({
+                     where: { id: chapterId },
+                     data: {
+                        filePath: uploadResult.filePath,
+                        fileSize: BigInt(uploadResult.fileSize),
+                        sourceUploadStatus: 'ready',
+                        sourceUploadError: null,
+                     },
+                  }),
+               );
 
                if (oldFilePath && oldFilePath !== chapter.filePath) {
                   await this.fileUploadService.deleteFile(oldFilePath);
@@ -422,13 +433,15 @@ export class ChapterService {
                await this.publishChapterTranscodingJob(chapter, { forceRetranscode: true });
             } catch (uploadError: unknown) {
                const message = uploadError instanceof Error ? uploadError.message : 'Upload failed';
-               chapter = await this.prisma.chapter.update({
-                  where: { id: chapterId },
-                  data: {
-                     sourceUploadStatus: 'failed',
-                     sourceUploadError: message,
-                  },
-               });
+               chapter = await runWrite(this.prisma, async (tx) =>
+                  tx.chapter.update({
+                     where: { id: chapterId },
+                     data: {
+                        sourceUploadStatus: 'failed',
+                        sourceUploadError: message,
+                     },
+                  }),
+               );
                throw new ApiError(`Failed to upload chapter audio: ${message}`, 500);
             }
          }
@@ -439,10 +452,12 @@ export class ChapterService {
                chapterId,
                coverImagePath,
             );
-            chapter = await this.prisma.chapter.update({
-               where: { id: chapterId },
-               data: { coverImage: primaryStorageKey },
-            });
+            chapter = await runWrite(this.prisma, async (tx) =>
+               tx.chapter.update({
+                  where: { id: chapterId },
+                  data: { coverImage: primaryStorageKey },
+               }),
+            );
          }
 
          // Schedule activation job if scheduledAt was provided
@@ -500,9 +515,11 @@ export class ChapterService {
          await mediaCleanupService.deleteStoredFile(chapter.coverImage);
          await mediaCleanupService.deleteStoredFile(chapter.filePath);
 
-         await this.prisma.chapter.delete({
-            where: { id: chapterId },
-         });
+         await runWrite(this.prisma, async (tx) =>
+            tx.chapter.delete({
+               where: { id: chapterId },
+            }),
+         );
 
          // Publish chapter deletion event to RabbitMQ
          try {
@@ -553,8 +570,11 @@ export class ChapterService {
          });
 
          return progress;
-      } catch (_error) {
-         throw new ApiError('Failed to retrieve chapter progress', 500);
+      } catch (error) {
+         if (error instanceof ApiError) {
+            throw error;
+         }
+         rethrowServiceError(error, { operation: 'getChapterProgress' }, MessageHandler.getErrorMessage('internal.default'));
       }
    }
 
@@ -581,26 +601,28 @@ export class ChapterService {
             throw new ApiError('Position cannot exceed chapter duration', 400);
          }
 
-         const progress = await this.prisma.chapterProgress.upsert({
-            where: {
-               userProfileId_chapterId: {
+         const progress = await runWrite(this.prisma, async (tx) =>
+            tx.chapterProgress.upsert({
+               where: {
+                  userProfileId_chapterId: {
+                     userProfileId,
+                     chapterId,
+                  },
+               },
+               update: {
+                  currentPosition: progressData.currentPosition,
+                  completed: progressData.completed || false,
+                  lastListenedAt: new Date(),
+               },
+               create: {
                   userProfileId,
                   chapterId,
+                  currentPosition: progressData.currentPosition,
+                  completed: progressData.completed || false,
+                  lastListenedAt: new Date(),
                },
-            },
-            update: {
-               currentPosition: progressData.currentPosition,
-               completed: progressData.completed || false,
-               lastListenedAt: new Date(),
-            },
-            create: {
-               userProfileId,
-               chapterId,
-               currentPosition: progressData.currentPosition,
-               completed: progressData.completed || false,
-               lastListenedAt: new Date(),
-            },
-         });
+            }),
+         );
 
          return progress;
       } catch (error) {
@@ -700,8 +722,8 @@ export class ChapterService {
             ...chapter,
             userProgress: chapter.userProgress || undefined
          } as ChapterWithProgress));
-      } catch (_error) {
-         throw new ApiError('Failed to retrieve chapters with progress', 500);
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'getChaptersWithProgress' }, MessageHandler.getErrorMessage('internal.default'));
       }
    }
 
@@ -739,8 +761,8 @@ export class ChapterService {
          });
 
          return progressRows.reduce((sum, row) => sum + row.currentPosition, 0);
-      } catch (_error) {
-         throw new ApiError('Failed to calculate audiobook progress', 500);
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'calculateAudiobookProgress' }, MessageHandler.getErrorMessage('internal.default'));
       }
    }
 

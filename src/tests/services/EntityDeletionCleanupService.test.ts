@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { EntityDeletionCleanupService } from '../../services/EntityDeletionCleanupService';
 import { AudiobookMediaCleanupService } from '../../services/AudiobookMediaCleanupService';
 import { mediaCleanupService } from '../../services/MediaCleanupService';
+import { attachPrismaTransaction } from '../helpers/prismaMock';
 
 jest.mock('../../services/AudiobookMediaCleanupService');
 jest.mock('../../services/MediaCleanupService', () => ({
@@ -27,7 +28,7 @@ describe('EntityDeletionCleanupService', () => {
          deleteAudiobookWithChapters: mockDeleteAudiobookWithChapters,
       }));
 
-      mockPrisma = {
+      mockPrisma = attachPrismaTransaction({
          userProfile: {
             findUnique: jest.fn(),
             delete: jest.fn().mockResolvedValue(undefined),
@@ -39,7 +40,7 @@ describe('EntityDeletionCleanupService', () => {
          audioBook: {
             findMany: jest.fn(),
          },
-      };
+      });
 
       service = new EntityDeletionCleanupService(mockPrisma as unknown as PrismaClient);
    });

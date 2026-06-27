@@ -70,7 +70,7 @@ export class ErrorHandler {
     }
 
     // Handle default errors
-    ResponseHandler.internalError(res, error.message);
+    ResponseHandler.internalError(res, MessageHandler.getErrorMessage('internal.default'));
   }
 
   /**
