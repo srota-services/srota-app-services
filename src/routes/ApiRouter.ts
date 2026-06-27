@@ -4,7 +4,8 @@
  */
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { authenticateJWT } from '../middleware/AuthMiddleware';
+import { authenticateJWT, authenticateJWTOrQuery } from '../middleware/AuthMiddleware';
+import { requireRegisteredUser } from '../middleware/RoleMiddleware';
 import { createAudioBookRoutes } from './audioBookRoutes';
 import { createChapterRoutes } from './chapterRoutes';
 import { createPlaybackRoutes } from './playbackRoutes';
@@ -75,28 +76,30 @@ export class ApiRouter {
     // SSE stream supports Bearer header or ?access_token= (EventSource)
     v1Router.use('/events', createDomainEventsRoutes());
 
+    // Streaming supports Bearer or ?access_token= for HLS segment requests
+    v1Router.use('/stream', authenticateJWTOrQuery, createStreamingRoutes(this.prisma));
+
     // Apply JWT authentication middleware to all other v1 routes
     v1Router.use(authenticateJWT);
 
     // Mount all route modules (protected routes)
     v1Router.use('/audiobooks', createAudioBookRoutes(this.prisma));
     v1Router.use('/', createChapterRoutes(this.prisma));
-    v1Router.use('/playback', createPlaybackRoutes(this.prisma));
-    v1Router.use('/', createBookmarkRoutes(this.prisma));
-    v1Router.use('/', createOfflineDownloadRoutes(this.prisma));
+    v1Router.use('/playback', requireRegisteredUser(), createPlaybackRoutes(this.prisma));
+    v1Router.use('/', requireRegisteredUser(), createBookmarkRoutes(this.prisma));
+    v1Router.use('/', requireRegisteredUser(), createOfflineDownloadRoutes(this.prisma));
     v1Router.use('/genres', createGenreRoutes(this.prisma));
     v1Router.use('/moods', createMoodRoutes(this.prisma));
     v1Router.use('/tags', createTagRoutes(this.prisma));
     v1Router.use('/author-profiles', createAuthorProfileRoutes(this.prisma));
-    v1Router.use('/stream', createStreamingRoutes(this.prisma));
-    v1Router.use('/', createUserProfileRoutes(this.prisma));
-    v1Router.use('/user-audiobooks', createUserAudioBookRoutes(this.prisma));
+    v1Router.use('/', requireRegisteredUser(), createUserProfileRoutes(this.prisma));
+    v1Router.use('/user-audiobooks', requireRegisteredUser(), createUserAudioBookRoutes(this.prisma));
     v1Router.use('/organizations', createOrganizationCatalogRoutes(this.prisma));
     v1Router.use('/comments', createCommentRoutes(this.prisma));
     v1Router.use('/reviews', createReviewRoutes(this.prisma));
-    v1Router.use('/favorites', createFavoriteRoutes(this.prisma));
-    v1Router.use('/playlists', createPlaylistRoutes(this.prisma));
-    v1Router.use('/listening-history', createListeningHistoryRoutes(this.prisma));
+    v1Router.use('/favorites', requireRegisteredUser(), createFavoriteRoutes(this.prisma));
+    v1Router.use('/playlists', requireRegisteredUser(), createPlaylistRoutes(this.prisma));
+    v1Router.use('/listening-history', requireRegisteredUser(), createListeningHistoryRoutes(this.prisma));
 
     // Mount v1 routes
     this.router.use('/v1', v1Router);

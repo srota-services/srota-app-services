@@ -138,10 +138,17 @@ export class AudioBookService {
   /**
    * Get all audiobooks assigned to a mood (used by GET /moods/:id).
    */
-  async getAudioBooksByMoodId(moodId: string, accessToken?: string): Promise<AudioBookDto[]> {
+  async getAudioBooksByMoodId(
+    moodId: string,
+    accessToken?: string,
+    guestCatalogOnly = false,
+  ): Promise<AudioBookDto[]> {
     try {
       const audiobooks = await this.prisma.audioBook.findMany({
-        where: { moodId },
+        where: {
+          moodId,
+          ...(guestCatalogOnly ? { isPublic: true, isActive: true } : {}),
+        },
         orderBy: { title: 'asc' },
         include: {
           _count: {

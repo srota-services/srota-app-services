@@ -9,6 +9,7 @@ import { ResponseHandler } from '../utils/ResponseHandler';
 import { ErrorHandler } from '../middleware/ErrorHandler';
 import { MessageHandler } from '../utils/MessageHandler';
 import { CreateMoodDto, UpdateMoodDto } from '../models/MoodDto';
+import { isGuestRequest } from '../utils/guestCatalogDefaults';
 
 function getBearerToken(req: Request): string | undefined {
    const authHeader = req.headers.authorization;
@@ -115,7 +116,7 @@ export class MoodController {
     */
    getMoodById = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
       const { id } = req.params as { id: string };
-      const mood = await this.moodService.getMoodById(id, getBearerToken(req));
+      const mood = await this.moodService.getMoodById(id, getBearerToken(req), isGuestRequest(req));
       ResponseHandler.success(res, mood, MessageHandler.getSuccessMessage('moods.retrieved'));
    });
 

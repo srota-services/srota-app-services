@@ -13,6 +13,7 @@ import { MessageHandler } from '../utils/MessageHandler';
 import { ContentAuthorizationService } from '../services/ContentAuthorizationService';
 import { AuthenticatedRequest } from '../types/auth';
 import { parseAudioBookOwnerFromBody } from '../utils/parseAudioBookOwner';
+import { applyGuestCatalogDefaults, isGuestRequest } from '../utils/guestCatalogDefaults';
 
 function getBearerToken(req: Request): string | undefined {
   const authorization = req.headers.authorization;
@@ -58,7 +59,7 @@ export class AudioBookController {
       moodIds = [req.query['moodId'] as string];
     }
 
-    const queryParams: AudioBookQueryParams = {
+    const queryParams = applyGuestCatalogDefaults(req, {
       page: req.query['page'] ? parseInt(req.query['page'] as string, 10) : 1,
       limit: req.query['limit'] ? parseInt(req.query['limit'] as string, 10) : 10,
       sortBy: req.query['sortBy'] as string || 'createdAt',
@@ -75,7 +76,7 @@ export class AudioBookController {
       search: req.query['search'] as string,
       active: req.query['active'] !== undefined ? req.query['active'] === 'true' : undefined,
       scheduled: req.query['scheduled'] !== undefined ? req.query['scheduled'] === 'true' : undefined,
-    };
+    });
 
     const { audiobooks, totalCount } = await this.audioBookService.getAllAudioBooks(
       queryParams,
@@ -101,6 +102,11 @@ export class AudioBookController {
       id as string,
       accessToken ?? undefined,
     );
+
+    if (isGuestRequest(req) && (!audiobook.isPublic || !audiobook.isActive)) {
+      ResponseHandler.notFound(res, MessageHandler.getErrorMessage('not_found.audiobook'));
+      return;
+    }
 
     const subscriptionAccess =
       await this.audioBookService.getSubscriptionAccessForAudiobook(
@@ -381,13 +387,13 @@ export class AudioBookController {
       return;
     }
 
-    const queryParams: AudioBookQueryParams = {
+    const queryParams = applyGuestCatalogDefaults(req, {
       page: parseInt(page as string, 10),
       limit: parseInt(limit as string, 10),
       search: q as string,
       sortBy: 'createdAt',
-      sortOrder: 'desc'
-    };
+      sortOrder: 'desc',
+    });
 
     const { audiobooks, totalCount } = await this.audioBookService.getAllAudioBooks(
       queryParams,
@@ -406,13 +412,13 @@ export class AudioBookController {
     const { genre } = req.params;
     const { page = 1, limit = 10 } = req.query;
 
-    const queryParams: AudioBookQueryParams = {
+    const queryParams = applyGuestCatalogDefaults(req, {
       page: parseInt(page as string, 10),
       limit: parseInt(limit as string, 10),
       genreIds: genre ? [genre as string] : undefined,
       sortBy: 'createdAt',
-      sortOrder: 'desc'
-    };
+      sortOrder: 'desc',
+    });
 
     const { audiobooks, totalCount } = await this.audioBookService.getAllAudioBooks(
       queryParams,
@@ -431,13 +437,13 @@ export class AudioBookController {
     const { author } = req.params;
     const { page = 1, limit = 10 } = req.query;
 
-    const queryParams: AudioBookQueryParams = {
+    const queryParams = applyGuestCatalogDefaults(req, {
       page: parseInt(page as string, 10),
       limit: parseInt(limit as string, 10),
       author: decodeURIComponent(author as string),
       sortBy: 'createdAt',
-      sortOrder: 'desc'
-    };
+      sortOrder: 'desc',
+    });
 
     const { audiobooks, totalCount } = await this.audioBookService.getAllAudioBooks(
       queryParams,
@@ -471,7 +477,7 @@ export class AudioBookController {
       genreIds = [req.query['genreId'] as string];
     }
 
-    const queryParams: AudioBookQueryParams = {
+    const queryParams = applyGuestCatalogDefaults(req, {
       page: parseInt(page as string, 10),
       limit: parseInt(limit as string, 10),
       sortBy: sortBy as string,
@@ -482,8 +488,8 @@ export class AudioBookController {
       narrator: req.query['narrator'] as string,
       isActive: req.query['isActive'] !== undefined ? req.query['isActive'] === 'true' : undefined,
       isPublic: req.query['isPublic'] !== undefined ? req.query['isPublic'] === 'true' : undefined,
-      search: req.query['search'] as string
-    };
+      search: req.query['search'] as string,
+    });
 
     const { audiobooks, totalCount } = await this.audioBookService.getAudioBooksByTags(
       tagList,

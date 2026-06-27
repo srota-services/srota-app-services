@@ -105,7 +105,7 @@ export class MoodService {
       }
    }
 
-   async getMoodById(id: string, accessToken?: string): Promise<MoodDetailDto> {
+   async getMoodById(id: string, accessToken?: string, guestCatalogOnly = false): Promise<MoodDetailDto> {
       try {
          const mood = await this.prisma.mood.findUnique({
             where: { id },
@@ -120,7 +120,7 @@ export class MoodService {
             );
          }
 
-         const audiobooks = await this.audioBookService.getAudioBooksByMoodId(id, accessToken);
+         const audiobooks = await this.audioBookService.getAudioBooksByMoodId(id, accessToken, guestCatalogOnly);
 
          return {
             ...(toMoodDto(mood, true) as MoodDto),

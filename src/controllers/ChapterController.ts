@@ -15,6 +15,7 @@ import { MessageHandler } from '../utils/MessageHandler';
 import { ApiError } from '../types/ApiError';
 import { HttpStatusCode, ErrorType } from '../types/common';
 import { AuthenticatedRequest } from '../types/auth';
+import { isGuestRequest } from '../utils/guestCatalogDefaults';
 
 export class ChapterController {
    private chapterService: ChapterService;
@@ -136,6 +137,7 @@ export class ChapterController {
          limit: req.query['limit'] ? parseInt(req.query['limit'] as string, 10) : 50,
          sortBy: req.query['sortBy'] as string || 'chapterNumber',
          sortOrder: (req.query['sortOrder'] as 'asc' | 'desc') || 'asc',
+         activeOnly: isGuestRequest(req),
       };
 
       const { chapters, totalCount } = await this.chapterService.getChaptersByAudiobookId(audiobookId!, queryParams);
@@ -185,6 +187,24 @@ export class ChapterController {
       const { id } = req.params;
 
       const chapter = await this.chapterService.getChapterById(id as string);
+
+      if (isGuestRequest(req)) {
+         if (!chapter.isActive) {
+            ResponseHandler.notFound(res, MessageHandler.getErrorMessage('not_found.chapter'));
+            return;
+         }
+
+         const audiobook = await this.prisma.audioBook.findUnique({
+            where: { id: chapter.audiobookId },
+            select: { isPublic: true, isActive: true },
+         });
+
+         if (!audiobook?.isPublic || !audiobook?.isActive) {
+            ResponseHandler.notFound(res, MessageHandler.getErrorMessage('not_found.chapter'));
+            return;
+         }
+      }
+
       const [chapterWithAccess] = await this.attachChapterSubscriptionAccess(
          [chapter],
          chapter.audiobookId,

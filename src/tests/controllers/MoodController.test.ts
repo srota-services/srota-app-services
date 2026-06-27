@@ -113,7 +113,7 @@ describe('MoodController', () => {
          await moodController.getMoodById(mockReq, mockRes, mockNext);
          await flushPromises();
 
-         expect(mockMoodService.getMoodById).toHaveBeenCalledWith('m1', undefined);
+         expect(mockMoodService.getMoodById).toHaveBeenCalledWith('m1', undefined, false);
          expect(ResponseHandler.success).toHaveBeenCalledWith(mockRes, mood, 'moods.retrieved');
       });
    });
