@@ -16,6 +16,7 @@ export type AppDomainResource =
    | 'genre'
    | 'mood'
    | 'user-audiobook'
+   | 'subscription-catalog'
    | 'offline-download';
 
 export interface CacheInvalidateEvent {

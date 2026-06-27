@@ -104,6 +104,8 @@ function keysForResource(
          return [['moods'], ['moods', id], ['audiobooks']];
       case 'user-audiobook':
          return [['user-audiobooks'], ['user-audiobooks', 'me']];
+      case 'subscription-catalog':
+         return [['audiobooks'], ['user-audiobooks'], ['user-audiobooks', 'me']];
       case 'offline-download':
          return [['offline-downloads'], ['offline-downloads', id], ['offline-downloads', 'me']];
       default:

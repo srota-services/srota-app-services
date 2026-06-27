@@ -238,6 +238,21 @@ export class RabbitMQConnection {
 
       await this.channel.bindQueue(`${queuePrefix}.users.deleted`, 'users', 'user.deleted');
 
+      await this.channel.assertQueue(`${queuePrefix}.users.subscription.changed`, {
+         durable: true,
+         exclusive: false,
+         autoDelete: false,
+         arguments: {
+            'x-message-ttl': 3600000
+         }
+      });
+
+      await this.channel.bindQueue(
+         `${queuePrefix}.users.subscription.changed`,
+         'users',
+         'user.subscription.changed',
+      );
+
       rabbitmqLogger.info('Users exchange and queue setup completed');
    }
 
@@ -586,6 +601,70 @@ export class RabbitMQConnection {
          rabbitmqLogger.info({ queueName }, 'Stopped consuming user creation messages from queue');
       } catch (error: any) {
          rabbitmqLogger.error({ err: error }, 'Error stopping user creation message consumer');
+      }
+   }
+
+   /**
+    * Consume subscription changed messages
+    */
+   public async consumeSubscriptionChangedMessages(
+      onMessage: (message: any) => Promise<void>
+   ): Promise<void> {
+      if (!this.channel) {
+         throw new Error('Channel not available');
+      }
+
+      const queuePrefix = config.RABBITMQ_QUEUE_PREFIX;
+      const queueName = `${queuePrefix}.users.subscription.changed`;
+
+      try {
+         await this.channel.consume(queueName, async (msg) => {
+            if (!msg) {
+               return;
+            }
+
+            try {
+               const messageContent = JSON.parse(msg.content.toString());
+               rabbitmqLogger.info({ messageContent }, 'Received subscription changed message');
+
+               await onMessage(messageContent);
+
+               this.channel!.ack(msg);
+               rabbitmqLogger.info(
+                  { userId: messageContent.userId, subscriptionId: messageContent.subscriptionId },
+                  'Processed subscription changed message',
+               );
+            } catch (error: any) {
+               rabbitmqLogger.error({ err: error }, 'Error processing subscription changed message');
+               this.channel!.ack(msg);
+            }
+         }, {
+            noAck: false
+         });
+
+         rabbitmqLogger.info({ queueName }, 'Started consuming subscription changed messages from queue');
+      } catch (error: any) {
+         rabbitmqLogger.error({ err: error }, 'Error setting up subscription changed message consumer');
+         throw error;
+      }
+   }
+
+   /**
+    * Stop consuming subscription changed messages
+    */
+   public async stopConsumingSubscriptionChangedMessages(): Promise<void> {
+      if (!this.channel) {
+         return;
+      }
+
+      const queuePrefix = config.RABBITMQ_QUEUE_PREFIX;
+      const queueName = `${queuePrefix}.users.subscription.changed`;
+
+      try {
+         await this.channel.cancel(queueName);
+         rabbitmqLogger.info({ queueName }, 'Stopped consuming subscription changed messages from queue');
+      } catch (error: any) {
+         rabbitmqLogger.error({ err: error }, 'Error stopping subscription changed message consumer');
       }
    }
 

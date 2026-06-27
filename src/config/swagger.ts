@@ -833,14 +833,15 @@ const options: swaggerJsdoc.Options = {
                type: 'object',
                required: ['version', 'service', 'resource', 'action', 'id', 'queryKeys', 'timestamp'],
                description:
-                  'TanStack Query cache-invalidation payload on SSE event `cache-invalidate`. Invalidate each key via queryClient.invalidateQueries({ queryKey }).',
+                  'TanStack Query cache-invalidation payload on SSE event `cache-invalidate`. Invalidate each key via queryClient.invalidateQueries({ queryKey }). For `subscription-catalog`, skip when relatedIds.userId does not match the current user; use removeQueries then invalidateQueries so tier-gated audiobook/chapter cache is cleared and refetched.',
                properties: {
                   version: { type: 'integer', example: 1 },
                   service: { type: 'string', enum: ['app'], example: 'app' },
                   resource: {
                      type: 'string',
                      example: 'audiobook',
-                     description: 'Stable entity name (audiobook, chapter, playlist, …)',
+                     description:
+                        'Stable entity name (audiobook, chapter, playlist, subscription-catalog, …). subscription-catalog is relayed from auth when effective subscription tier/access changes.',
                   },
                   action: { type: 'string', enum: ['created', 'updated', 'deleted'] },
                   id: { type: 'string' },
