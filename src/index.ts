@@ -6,8 +6,9 @@ import express from 'express';
 import helmet from 'helmet';
 import path from 'path';
 import { config } from './config/env';
-import { logger } from './config/logger';
+import { logger, errorLogger } from './config/logger';
 import { apiLoggerMiddleware } from './middleware/ApiLoggerMiddleware';
+import { apiErrorLogMiddleware } from './middleware/ApiErrorLogMiddleware';
 import { ApiRouter } from './routes/ApiRouter';
 import { ErrorHandler } from './middleware/ErrorHandler';
 import { MessageHandler } from './utils/MessageHandler';
@@ -22,6 +23,15 @@ import { UserConsumerWorkerFactory } from './workers/UserConsumerWorker';
 import { AuthorConsumerWorkerFactory } from './workers/AuthorConsumerWorker';
 import { EntityDeletionConsumerWorkerFactory } from './workers/EntityDeletionConsumerWorker';
 import { prisma } from './lib/prisma';
+
+process.on('uncaughtException', (err) => {
+   errorLogger.error({ category: 'system', type: 'uncaughtException', err }, 'Uncaught exception');
+   process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+   errorLogger.error({ category: 'system', type: 'unhandledRejection', err: reason }, 'Unhandled rejection');
+});
 
 const app = express();
 
@@ -41,6 +51,9 @@ app.use(express.urlencoded({ extended: true }));
 // API access logging middleware
 // This middleware ONLY logs API access requests in format: host:api:statusCode:date_time_IST
 app.use(apiLoggerMiddleware);
+
+// Log API error responses (4xx/5xx) to error.log
+app.use(apiErrorLogMiddleware);
 
 // Session configuration
 app.use(session({
