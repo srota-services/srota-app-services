@@ -23,16 +23,40 @@ import { ImageAssetService } from './ImageAssetService';
 import { fileUrlService } from './FileUrlService';
 import { mediaCleanupService } from './MediaCleanupService';
 import { emitCacheInvalidation } from './DomainEventPublisher';
+import { emitSubscriptionGatingInvalidation } from './subscriptionGatingInvalidation';
+import {
+   resolveChapterTierForCreate,
+   resolveChapterTierForUpdate,
+} from '../utils/subscriptionGatingValidation';
+import { SubscriptionAccessService, subscriptionAccessService } from './SubscriptionAccessService';
+import { SubscriptionGatingMode } from '@prisma/client';
+import { SubscriptionAccessDto } from '../models/SubscriptionAccessDto';
 
 export class ChapterService {
    private fileUploadService: FileUploadService;
    private backgroundJobService: BackgroundJobService | undefined;
    private imageAssetService: ImageAssetService;
+   private subscriptionAccessService: SubscriptionAccessService;
 
-   constructor(private prisma: PrismaClient, backgroundJobService?: BackgroundJobService) {
+   constructor(
+      private prisma: PrismaClient,
+      backgroundJobService?: BackgroundJobService,
+      subscriptionAccessServiceInstance: SubscriptionAccessService = subscriptionAccessService,
+   ) {
       this.fileUploadService = new FileUploadService();
       this.backgroundJobService = backgroundJobService;
       this.imageAssetService = new ImageAssetService(prisma);
+      this.subscriptionAccessService = subscriptionAccessServiceInstance;
+   }
+
+   async getSubscriptionAccessForChapter(
+      chapter: { minSubscriptionTier: number | null },
+      audiobook: { subscriptionGatingMode: SubscriptionGatingMode; minSubscriptionTier: number | null },
+      userId: string | null,
+      accessToken: string | null,
+   ): Promise<SubscriptionAccessDto> {
+      const requiredTier = this.subscriptionAccessService.resolveChapterRequiredTier(audiobook, chapter);
+      return this.subscriptionAccessService.evaluateAccess(requiredTier, userId, accessToken);
    }
 
    /**
@@ -133,6 +157,12 @@ export class ChapterService {
             throw new ApiError('Audiobook not found', 404);
          }
 
+         const chapterTier = await resolveChapterTierForCreate(
+            this.prisma,
+            chapterData.audiobookId,
+            chapterData.minSubscriptionTier,
+         );
+
          // Check if chapter number already exists for this audiobook
          const existingChapter = await this.prisma.chapter.findFirst({
             where: {
@@ -165,6 +195,7 @@ export class ChapterService {
 
          const createData: any = {
             ...chapterData,
+            minSubscriptionTier: chapterTier,
             filePath: hasAudioUpload ? '' : filePath,
             fileSize: BigInt(hasAudioUpload ? 0 : fileSize),
             coverImage,
@@ -254,6 +285,12 @@ export class ChapterService {
          }
 
          emitCacheInvalidation('chapter', 'created', chapter.id, { audiobookId: chapterData.audiobookId });
+         if (chapterTier !== null) {
+            emitSubscriptionGatingInvalidation({
+               action: 'updated',
+               audiobookId: chapterData.audiobookId,
+            });
+         }
          return fileUrlService.resolveChapterMedia(this.mapChapterData(chapter));
       } catch (error) {
          if (error instanceof ApiError) {
@@ -320,6 +357,7 @@ export class ChapterService {
          }
 
          const updatePayload: any = { ...updateData };
+         delete updatePayload.minSubscriptionTier;
          if (filePath !== undefined) {
             updatePayload.filePath = filePath;
          }
@@ -338,6 +376,16 @@ export class ChapterService {
          // Handle scheduledAt: if provided, set isActive=false
          if (updateData.scheduledAt !== undefined) {
             updatePayload.isActive = false;
+         }
+
+         const resolvedTier = await resolveChapterTierForUpdate(
+            this.prisma,
+            existingChapter.audiobookId,
+            chapterId,
+            updateData.minSubscriptionTier,
+         );
+         if (resolvedTier !== undefined) {
+            updatePayload.minSubscriptionTier = resolvedTier;
          }
 
          let chapter = await this.prisma.chapter.update({
@@ -412,6 +460,12 @@ export class ChapterService {
          }
 
          emitCacheInvalidation('chapter', 'updated', chapterId, { audiobookId: existingChapter.audiobookId });
+         if (resolvedTier !== undefined) {
+            emitSubscriptionGatingInvalidation({
+               action: 'updated',
+               audiobookId: existingChapter.audiobookId,
+            });
+         }
          return fileUrlService.resolveChapterMedia(this.mapChapterData(chapter));
       } catch (error) {
          if (error instanceof ApiError) {
@@ -741,6 +795,7 @@ export class ChapterService {
       coverImage: string;
       startPosition: number;
       endPosition: number;
+      minSubscriptionTier?: number | null;
       isActive: boolean;
       sourceUploadStatus?: 'pending' | 'ready' | 'failed';
       sourceUploadError?: string | null;
@@ -764,6 +819,7 @@ export class ChapterService {
          coverImage: chapter.coverImage,
          startPosition: chapter.startPosition,
          endPosition: chapter.endPosition,
+         minSubscriptionTier: chapter.minSubscriptionTier ?? null,
          isActive: chapter.isActive,
          sourceUploadStatus: chapter.sourceUploadStatus ?? 'ready',
          ...(chapter.sourceUploadError ? { sourceUploadError: chapter.sourceUploadError } : {}),

@@ -40,4 +40,18 @@ describe('SubscriptionConsumerWorker', () => {
          }),
       ).rejects.toThrow('userId is required');
    });
+
+   it('emits subscription-gating cache invalidation on plan gating message', async () => {
+      await (worker as any).handleSubscriptionGatingChangedMessage({
+         planId: 'plan-1',
+         action: 'updated',
+      });
+
+      expect(emitCacheInvalidation).toHaveBeenCalledWith(
+         'subscription-gating',
+         'updated',
+         'plan-1',
+         { planId: 'plan-1' },
+      );
+   });
 });

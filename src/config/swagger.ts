@@ -69,6 +69,22 @@ const options: swaggerJsdoc.Options = {
                enum: ['AUTHOR', 'ORGANIZATION'],
                description: 'Polymorphic owner kind (auth-service Author or Organization)',
             },
+            SubscriptionGatingMode: {
+               type: 'string',
+               enum: ['NONE', 'AUDIOBOOK', 'CHAPTER'],
+               description:
+                  'NONE = no gating. AUDIOBOOK = whole-book tier on minSubscriptionTier. CHAPTER = per-chapter tier (uniform across all chapters); audiobook detail stays open.',
+            },
+            SubscriptionAccess: {
+               type: 'object',
+               required: ['canAccess'],
+               properties: {
+                  canAccess: { type: 'boolean' },
+                  message: { type: 'string' },
+                  requiredTier: { type: 'integer' },
+                  userTier: { type: 'integer', nullable: true },
+               },
+            },
             AudioBookOwnerInput: {
                type: 'object',
                required: ['type', 'id'],
@@ -214,6 +230,18 @@ const options: swaggerJsdoc.Options = {
                      description: 'Whether the audiobook is publicly available',
                      example: true
                   },
+                  subscriptionGatingMode: {
+                     $ref: '#/components/schemas/SubscriptionGatingMode',
+                  },
+                  minSubscriptionTier: {
+                     type: 'integer',
+                     nullable: true,
+                     description:
+                        'Required tier when subscriptionGatingMode is AUDIOBOOK. Must be null when mode is CHAPTER or NONE.',
+                  },
+                  subscriptionAccess: {
+                     $ref: '#/components/schemas/SubscriptionAccess',
+                  },
                   owner: {
                      $ref: '#/components/schemas/AudioBookOwner',
                   },
@@ -291,8 +319,12 @@ const options: swaggerJsdoc.Options = {
                   minSubscriptionTier: {
                      type: 'integer',
                      nullable: true,
-                     description: 'Optional minimum subscription tier required to access this audiobook',
+                     description:
+                        'Minimum subscription tier. With subscriptionGatingMode AUDIOBOOK, gates the whole book. With CHAPTER, applied uniformly to all chapters (audiobook field stored as null).',
                      example: 2,
+                  },
+                  subscriptionGatingMode: {
+                     $ref: '#/components/schemas/SubscriptionGatingMode',
                   },
                   scheduledAt: {
                      type: 'string',
@@ -529,6 +561,15 @@ const options: swaggerJsdoc.Options = {
                      description: 'Error when sourceUploadStatus is failed',
                   },
                   scheduledAt: { type: 'string', format: 'date-time', nullable: true },
+                  minSubscriptionTier: {
+                     type: 'integer',
+                     nullable: true,
+                     description:
+                        'Minimum tier when parent audiobook uses CHAPTER gating. All chapters in an audiobook must share the same value.',
+                  },
+                  subscriptionAccess: {
+                     $ref: '#/components/schemas/SubscriptionAccess',
+                  },
                   createdAt: { type: 'string', format: 'date-time' },
                   updatedAt: { type: 'string', format: 'date-time' },
                },
@@ -833,7 +874,7 @@ const options: swaggerJsdoc.Options = {
                type: 'object',
                required: ['version', 'service', 'resource', 'action', 'id', 'queryKeys', 'timestamp'],
                description:
-                  'TanStack Query cache-invalidation payload on SSE event `cache-invalidate`. Invalidate each key via queryClient.invalidateQueries({ queryKey }). For `subscription-catalog`, skip when relatedIds.userId does not match the current user; use removeQueries then invalidateQueries so tier-gated audiobook/chapter cache is cleared and refetched.',
+                  'TanStack Query cache-invalidation payload on SSE event `cache-invalidate`. Invalidate each key via queryClient.invalidateQueries({ queryKey }). For `subscription-catalog`, skip when relatedIds.userId does not match the current user; use removeQueries then invalidateQueries so tier-gated audiobook/chapter cache is cleared and refetched. For `subscription-gating`, invalidate when audiobook/chapter gating config changes or when relayed from auth after plan tier definition changes; includes audiobook detail and chapter list keys when relatedIds.audiobookId is set.',
                properties: {
                   version: { type: 'integer', example: 1 },
                   service: { type: 'string', enum: ['app'], example: 'app' },
@@ -841,7 +882,7 @@ const options: swaggerJsdoc.Options = {
                      type: 'string',
                      example: 'audiobook',
                      description:
-                        'Stable entity name (audiobook, chapter, playlist, subscription-catalog, …). subscription-catalog is relayed from auth when effective subscription tier/access changes.',
+                        'Stable entity name (audiobook, chapter, playlist, subscription-catalog, subscription-gating, …). subscription-catalog is relayed from auth when a user effective subscription tier changes. subscription-gating is emitted locally when gating mode/tier changes on audiobooks/chapters, or relayed from auth when plan tier definitions change.',
                   },
                   action: { type: 'string', enum: ['created', 'updated', 'deleted'] },
                   id: { type: 'string' },

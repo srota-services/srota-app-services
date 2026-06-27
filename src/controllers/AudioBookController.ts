@@ -2,8 +2,8 @@
  * AudioBook Controller
  * Handles HTTP requests and responses following MVC pattern
  */
+import { SubscriptionGatingMode, PrismaClient } from '@prisma/client';
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { AudioBookService } from '../services/AudioBookService';
 import { BackgroundJobService } from '../services/BackgroundJobService';
 import { ResponseHandler } from '../utils/ResponseHandler';
@@ -105,7 +105,10 @@ export class AudioBookController {
     const subscriptionAccess =
       await this.audioBookService.getSubscriptionAccessForAudiobook(
         audiobook.id,
-        audiobook.minSubscriptionTier,
+        {
+          subscriptionGatingMode: audiobook.subscriptionGatingMode as SubscriptionGatingMode,
+          minSubscriptionTier: audiobook.minSubscriptionTier ?? null,
+        },
         externalUserId,
         accessToken
       );

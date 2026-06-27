@@ -63,6 +63,7 @@ describe('AudioBookController subscription gating', () => {
          id: audiobookId,
          title: 'Gated Book',
          owner: { type: 'ORGANIZATION', id: orgId },
+         subscriptionGatingMode: 'AUDIOBOOK',
          minSubscriptionTier: 2,
          isPublic: false,
       };
@@ -79,9 +80,12 @@ describe('AudioBookController subscription gating', () => {
 
       expect(mockAudioBookService.getSubscriptionAccessForAudiobook).toHaveBeenCalledWith(
          audiobookId,
-         2,
+         {
+            subscriptionGatingMode: 'AUDIOBOOK',
+            minSubscriptionTier: 2,
+         },
          authUserId,
-         accessToken
+         accessToken,
       );
       expect(ResponseHandler.success).toHaveBeenCalled();
    });

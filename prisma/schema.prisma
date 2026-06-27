@@ -72,10 +72,10 @@ model AudioBook {
   isPublic Boolean @default(true)
 
   // Subscription gating: minimum subscription tier required to access this
-  // audiobook. `null` means no subscription tier is required. The value is
-  // compared against `SubscriptionPlan.tierLevel`; a user's active subscription
-  // must have `tierLevel >= minSubscriptionTier` to be granted access.
-  minSubscriptionTier Int?
+  // audiobook when subscriptionGatingMode is AUDIOBOOK. `null` when mode is
+  // NONE or CHAPTER. Compared against auth SubscriptionPlan.tierLevel.
+  subscriptionGatingMode SubscriptionGatingMode @default(NONE)
+  minSubscriptionTier    Int?
 
   // Offline availability
   isOfflineAvailable Boolean @default(false)
@@ -316,6 +316,12 @@ enum SourceUploadStatus {
   failed
 }
 
+enum SubscriptionGatingMode {
+  NONE
+  AUDIOBOOK
+  CHAPTER
+}
+
 // Chapter model for audiobook chapters
 model Chapter {
   id          String  @id @default(cuid())
@@ -333,6 +339,10 @@ model Chapter {
   // Chapter start/end positions in main audiobook file
   startPosition Int // Start position in seconds within main audiobook
   endPosition   Int // End position in seconds within main audiobook
+
+  // Subscription gating when parent audiobook subscriptionGatingMode is CHAPTER.
+  // All chapters in an audiobook must share the same minSubscriptionTier.
+  minSubscriptionTier Int?
 
   // Status
   isActive             Boolean            @default(true)

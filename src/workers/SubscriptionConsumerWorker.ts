@@ -1,10 +1,13 @@
 /**
  * Subscription Consumer Worker
- * RabbitMQ consumer for subscription tier/access change events from auth-service
+ * RabbitMQ consumer for subscription tier/access and gating events from auth-service
  */
 import { RabbitMQFactory } from '../config/rabbitmq';
 import { emitCacheInvalidation } from '../services/DomainEventPublisher';
-import { SubscriptionChangedMessage } from '../types/subscription-events';
+import {
+   SubscriptionChangedMessage,
+   SubscriptionGatingChangedMessage,
+} from '../types/subscription-events';
 
 export class SubscriptionConsumerWorker {
    private isRunning = false;
@@ -22,6 +25,9 @@ export class SubscriptionConsumerWorker {
 
       const rabbitMQ = RabbitMQFactory.getConnection();
       await rabbitMQ.consumeSubscriptionChangedMessages(this.handleSubscriptionChangedMessage.bind(this));
+      await rabbitMQ.consumeSubscriptionGatingChangedMessages(
+         this.handleSubscriptionGatingChangedMessage.bind(this),
+      );
 
       console.log('Subscription consumer worker started successfully');
       this.isRunning = true;
@@ -39,6 +45,7 @@ export class SubscriptionConsumerWorker {
       try {
          const rabbitMQ = RabbitMQFactory.getConnection();
          await rabbitMQ.stopConsumingSubscriptionChangedMessages();
+         await rabbitMQ.stopConsumingSubscriptionGatingChangedMessages();
          this.isRunning = false;
          console.log('Subscription consumer worker stopped');
       } catch (_error: unknown) {
@@ -47,7 +54,7 @@ export class SubscriptionConsumerWorker {
    }
 
    /**
-    * Handle subscription changed message — emit app SSE cache invalidation only
+    * Handle user subscription changed message — emit app SSE cache invalidation only
     */
    private async handleSubscriptionChangedMessage(message: SubscriptionChangedMessage): Promise<void> {
       if (!message.userId || typeof message.userId !== 'string') {
@@ -65,6 +72,24 @@ export class SubscriptionConsumerWorker {
 
       emitCacheInvalidation('subscription-catalog', message.action, message.subscriptionId, {
          userId: message.userId,
+         planId: message.planId,
+      });
+   }
+
+   /**
+    * Handle subscription plan gating definition change — invalidate catalog/chapter access caches
+    */
+   private async handleSubscriptionGatingChangedMessage(
+      message: SubscriptionGatingChangedMessage,
+   ): Promise<void> {
+      if (!message.planId || typeof message.planId !== 'string') {
+         throw new Error('Invalid message: planId is required and must be a string');
+      }
+      if (!message.action || !['created', 'updated', 'deleted'].includes(message.action)) {
+         throw new Error('Invalid message: action must be created, updated, or deleted');
+      }
+
+      emitCacheInvalidation('subscription-gating', message.action, message.planId, {
          planId: message.planId,
       });
    }
