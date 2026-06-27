@@ -95,6 +95,7 @@ describe('FileUrlService', () => {
             language: 'en',
             isActive: true,
             isPublic: true,
+            subscriptionGatingMode: 'NONE',
             minSubscriptionTier: null,
             owner: { type: 'ORGANIZATION', id: 'org-1' },
             createdAt: new Date(),

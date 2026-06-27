@@ -28,6 +28,7 @@ describe('AudioBookOwnerService', () => {
       language: 'en',
       isActive: true,
       isPublic: true,
+      subscriptionGatingMode: 'NONE',
       createdAt: new Date(),
       updatedAt: new Date(),
       owner: { type: 'ORGANIZATION', id: 'org-1' },

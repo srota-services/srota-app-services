@@ -188,6 +188,7 @@ describe('MoodService', () => {
                language: 'en',
                isActive: true,
                isPublic: true,
+               subscriptionGatingMode: 'NONE' as const,
                createdAt: new Date(),
                updatedAt: new Date(),
                owner: { type: 'AUTHOR' as const, id: 'author-1' },
