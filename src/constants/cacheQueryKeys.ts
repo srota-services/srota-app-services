@@ -106,6 +106,14 @@ function keysForResource(
          return [['user-audiobooks'], ['user-audiobooks', 'me']];
       case 'subscription-catalog':
          return [['audiobooks'], ['user-audiobooks'], ['user-audiobooks', 'me']];
+      case 'subscription-gating': {
+         const audiobookId = relatedIds['audiobookId'];
+         const keys: string[][] = [['audiobooks']];
+         if (audiobookId) {
+            keys.push(['audiobooks', audiobookId], ['audiobooks', audiobookId, 'chapters']);
+         }
+         return keys;
+      }
       case 'offline-download':
          return [['offline-downloads'], ['offline-downloads', id], ['offline-downloads', 'me']];
       default:

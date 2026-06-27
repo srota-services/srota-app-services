@@ -4,6 +4,7 @@
  */
 
 import { ChapterProgress, Bookmark, Note } from '@prisma/client';
+import { SubscriptionAccessDto } from './SubscriptionAccessDto';
 
 // Base Chapter interface
 export interface ChapterData {
@@ -19,6 +20,7 @@ export interface ChapterData {
    imageAssets?: Record<string, string>;
    startPosition: number;
    endPosition: number;
+   minSubscriptionTier?: number | null;
    isActive: boolean;
    sourceUploadStatus?: 'pending' | 'ready' | 'failed';
    sourceUploadError?: string | null;
@@ -29,6 +31,7 @@ export interface ChapterData {
 
 // Chapter with relations
 export interface ChapterWithRelations extends ChapterData {
+   subscriptionAccess?: SubscriptionAccessDto;
    audiobook?: {
       id: string;
       title: string;
@@ -52,6 +55,7 @@ export interface CreateChapterRequest {
    startPosition: number;
    endPosition: number;
    isActive?: boolean;
+   minSubscriptionTier?: number | null;
    scheduledAt?: Date;
 }
 
@@ -67,6 +71,7 @@ export interface UpdateChapterRequest {
    startPosition?: number;
    endPosition?: number;
    isActive?: boolean;
+   minSubscriptionTier?: number | null;
    scheduledAt?: Date;
 }
 

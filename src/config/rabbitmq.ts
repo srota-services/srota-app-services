@@ -253,6 +253,21 @@ export class RabbitMQConnection {
          'user.subscription.changed',
       );
 
+      await this.channel.assertQueue(`${queuePrefix}.subscription.gating.changed`, {
+         durable: true,
+         exclusive: false,
+         autoDelete: false,
+         arguments: {
+            'x-message-ttl': 3600000
+         }
+      });
+
+      await this.channel.bindQueue(
+         `${queuePrefix}.subscription.gating.changed`,
+         'users',
+         'subscription.gating.changed',
+      );
+
       rabbitmqLogger.info('Users exchange and queue setup completed');
    }
 
@@ -665,6 +680,70 @@ export class RabbitMQConnection {
          rabbitmqLogger.info({ queueName }, 'Stopped consuming subscription changed messages from queue');
       } catch (error: any) {
          rabbitmqLogger.error({ err: error }, 'Error stopping subscription changed message consumer');
+      }
+   }
+
+   /**
+    * Consume subscription gating changed messages (plan tier definition changes from auth)
+    */
+   public async consumeSubscriptionGatingChangedMessages(
+      onMessage: (message: any) => Promise<void>
+   ): Promise<void> {
+      if (!this.channel) {
+         throw new Error('Channel not available');
+      }
+
+      const queuePrefix = config.RABBITMQ_QUEUE_PREFIX;
+      const queueName = `${queuePrefix}.subscription.gating.changed`;
+
+      try {
+         await this.channel.consume(queueName, async (msg) => {
+            if (!msg) {
+               return;
+            }
+
+            try {
+               const messageContent = JSON.parse(msg.content.toString());
+               rabbitmqLogger.info({ messageContent }, 'Received subscription gating changed message');
+
+               await onMessage(messageContent);
+
+               this.channel!.ack(msg);
+               rabbitmqLogger.info(
+                  { planId: messageContent.planId },
+                  'Processed subscription gating changed message',
+               );
+            } catch (error: any) {
+               rabbitmqLogger.error({ err: error }, 'Error processing subscription gating changed message');
+               this.channel!.ack(msg);
+            }
+         }, {
+            noAck: false
+         });
+
+         rabbitmqLogger.info({ queueName }, 'Started consuming subscription gating changed messages from queue');
+      } catch (error: any) {
+         rabbitmqLogger.error({ err: error }, 'Error setting up subscription gating changed message consumer');
+         throw error;
+      }
+   }
+
+   /**
+    * Stop consuming subscription gating changed messages
+    */
+   public async stopConsumingSubscriptionGatingChangedMessages(): Promise<void> {
+      if (!this.channel) {
+         return;
+      }
+
+      const queuePrefix = config.RABBITMQ_QUEUE_PREFIX;
+      const queueName = `${queuePrefix}.subscription.gating.changed`;
+
+      try {
+         await this.channel.cancel(queueName);
+         rabbitmqLogger.info({ queueName }, 'Stopped consuming subscription gating changed messages from queue');
+      } catch (error: any) {
+         rabbitmqLogger.error({ err: error }, 'Error stopping subscription gating changed message consumer');
       }
    }
 

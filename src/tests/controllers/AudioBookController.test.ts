@@ -184,7 +184,12 @@ describe('AudioBookController', () => {
    describe('getAudioBookById', () => {
       it('should retrieve audiobook by ID with subscription access', async () => {
          mockReq.params.id = 'book-123';
-         const mockBook = { id: 'book-123', title: 'Test Book', minSubscriptionTier: null };
+         const mockBook = {
+            id: 'book-123',
+            title: 'Test Book',
+            subscriptionGatingMode: 'NONE',
+            minSubscriptionTier: null,
+         };
          const subscriptionAccess = { canAccess: true };
 
          mockAudioBookService.getAudioBookById.mockResolvedValue(mockBook as any);
@@ -200,7 +205,10 @@ describe('AudioBookController', () => {
          expect(mockAudioBookService.getAudioBookById).toHaveBeenCalledWith('book-123', 'test-token');
          expect(mockAudioBookService.getSubscriptionAccessForAudiobook).toHaveBeenCalledWith(
             'book-123',
-            null,
+            {
+               subscriptionGatingMode: 'NONE',
+               minSubscriptionTier: null,
+            },
             'auth-user-1',
             'test-token'
          );

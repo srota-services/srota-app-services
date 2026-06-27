@@ -5,6 +5,7 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { ChapterService } from '../services/ChapterService';
+import { ChapterWithRelations } from '../models/ChapterDto';
 import { BackgroundJobService } from '../services/BackgroundJobService';
 import { ContentAuthorizationService } from '../services/ContentAuthorizationService';
 import { ResponseHandler } from '../utils/ResponseHandler';
@@ -59,6 +60,36 @@ export class ChapterController {
       return profile.id;
    }
 
+   private async attachChapterSubscriptionAccess(
+      chapters: ChapterWithRelations[],
+      audiobookId: string,
+      req: Request,
+   ): Promise<ChapterWithRelations[]> {
+      const authUser = (req as AuthenticatedRequest).user;
+      const userId = authUser?.id ?? null;
+      const accessToken = this.getBearerToken(req) ?? null;
+
+      const audiobook = await this.prisma.audioBook.findUnique({
+         where: { id: audiobookId },
+         select: { subscriptionGatingMode: true, minSubscriptionTier: true },
+      });
+      if (!audiobook) {
+         return chapters;
+      }
+
+      return Promise.all(
+         chapters.map(async (chapter) => ({
+            ...chapter,
+            subscriptionAccess: await this.chapterService.getSubscriptionAccessForChapter(
+               { minSubscriptionTier: chapter.minSubscriptionTier ?? null },
+               audiobook,
+               userId,
+               accessToken,
+            ),
+         })),
+      );
+   }
+
    /**
     * @swagger
     * /api/v1/audiobooks/{audiobookId}/chapters:
@@ -108,6 +139,7 @@ export class ChapterController {
       };
 
       const { chapters, totalCount } = await this.chapterService.getChaptersByAudiobookId(audiobookId!, queryParams);
+      const chaptersWithAccess = await this.attachChapterSubscriptionAccess(chapters, audiobookId!, req);
 
       const pagination = ResponseHandler.calculatePagination(
          queryParams.page!,
@@ -115,7 +147,7 @@ export class ChapterController {
          totalCount
       );
 
-      ResponseHandler.paginated(res, chapters, pagination, MessageHandler.getSuccessMessage('chapters.retrieved'));
+      ResponseHandler.paginated(res, chaptersWithAccess, pagination, MessageHandler.getSuccessMessage('chapters.retrieved'));
    });
 
    /**
@@ -153,8 +185,13 @@ export class ChapterController {
       const { id } = req.params;
 
       const chapter = await this.chapterService.getChapterById(id as string);
+      const [chapterWithAccess] = await this.attachChapterSubscriptionAccess(
+         [chapter],
+         chapter.audiobookId,
+         req,
+      );
 
-      ResponseHandler.success(res, chapter, MessageHandler.getSuccessMessage('chapters.retrieved_by_id'));
+      ResponseHandler.success(res, chapterWithAccess, MessageHandler.getSuccessMessage('chapters.retrieved_by_id'));
    });
 
    /**

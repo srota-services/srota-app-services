@@ -2,19 +2,25 @@
  * AudioBook Service Layer
  * Handles business logic and database operations following OOP principles
  */
-import { PrismaClient, Prisma, UserAudioBookType } from '@prisma/client';
+import { PrismaClient, Prisma, UserAudioBookType, SubscriptionGatingMode } from '@prisma/client';
 import { SubscriptionClient, subscriptionClient } from '../clients/SubscriptionClient';
 import {
   AudioBookDto,
-  AudiobookSubscriptionAccessDto,
   CreateAudioBookDto,
   UpdateAudioBookDto,
   AudioBookQueryParams,
   toAudioBookDto,
   toPrismaOwnerType,
 } from '../models/AudioBookDto';
+import { SubscriptionAccessDto } from '../models/SubscriptionAccessDto';
 import { ApiError } from '../types/ApiError';
 import { MessageHandler } from '../utils/MessageHandler';
+import {
+  resolveAudiobookGatingCreate,
+  resolveAudiobookGatingUpdate,
+  syncChapterTiersForAudiobook,
+  AudiobookGatingInput,
+} from '../utils/subscriptionGatingValidation';
 import { BackgroundJobService } from './BackgroundJobService';
 import { fileUrlService } from './FileUrlService';
 import { UserAudioBookService } from './UserAudioBookService';
@@ -24,22 +30,26 @@ import { AudiobookMediaCleanupService } from './AudiobookMediaCleanupService';
 import { AudioBookOwnerService } from './AudioBookOwnerService';
 import { ImageAssetService } from './ImageAssetService';
 import { emitCacheInvalidation } from './DomainEventPublisher';
+import { emitSubscriptionGatingInvalidation } from './subscriptionGatingInvalidation';
+import { SubscriptionAccessService } from './SubscriptionAccessService';
 
 export class AudioBookService {
   private prisma: PrismaClient;
   private backgroundJobService: BackgroundJobService | undefined;
-  private subscriptionClient: SubscriptionClient;
+  private subscriptionAccessService: SubscriptionAccessService;
   private audioBookOwnerService: AudioBookOwnerService;
   private imageAssetService: ImageAssetService;
 
   constructor(
     prisma: PrismaClient,
     backgroundJobService?: BackgroundJobService,
-    subscriptionClientInstance: SubscriptionClient = subscriptionClient
+    subscriptionClientInstance: SubscriptionClient = subscriptionClient,
+    subscriptionAccessServiceInstance?: SubscriptionAccessService,
   ) {
     this.prisma = prisma;
     this.backgroundJobService = backgroundJobService;
-    this.subscriptionClient = subscriptionClientInstance;
+    this.subscriptionAccessService =
+      subscriptionAccessServiceInstance ?? new SubscriptionAccessService(subscriptionClientInstance);
     this.audioBookOwnerService = new AudioBookOwnerService(prisma);
     this.imageAssetService = new ImageAssetService(prisma);
   }
@@ -388,9 +398,18 @@ export class AudioBookService {
       if (audiobookData.publisher !== undefined) createData.publisher = audiobookData.publisher;
       if (audiobookData.publishDate !== undefined) createData.publishDate = audiobookData.publishDate;
       if (audiobookData.isbn !== undefined) createData.isbn = audiobookData.isbn;
-      if (audiobookData.minSubscriptionTier !== undefined) {
-        createData.minSubscriptionTier = this.validateMinSubscriptionTier(audiobookData.minSubscriptionTier);
+
+      const gatingInput: AudiobookGatingInput = {};
+      if (audiobookData.subscriptionGatingMode !== undefined) {
+        gatingInput.subscriptionGatingMode = audiobookData.subscriptionGatingMode;
       }
+      if (audiobookData.minSubscriptionTier !== undefined) {
+        gatingInput.minSubscriptionTier = audiobookData.minSubscriptionTier;
+      }
+      const gating = resolveAudiobookGatingCreate(gatingInput);
+      createData.subscriptionGatingMode = gating.subscriptionGatingMode;
+      createData.minSubscriptionTier = gating.minSubscriptionTier;
+
       if (audiobookData.moodId !== undefined) {
         createData.moodId = moodIdForCreate ?? null;
       }
@@ -480,6 +499,9 @@ export class AudioBookService {
       }
 
       emitCacheInvalidation('audiobook', 'created', audiobook.id);
+      if (gating.subscriptionGatingMode !== SubscriptionGatingMode.NONE) {
+         emitSubscriptionGatingInvalidation({ action: 'created', audiobookId: audiobook.id });
+      }
       return this.hydrateOwner(
         await fileUrlService.resolveAudioBookMedia(toAudioBookDto(audiobookWithRelations)),
         accessToken,
@@ -529,14 +551,43 @@ export class AudioBookService {
         coverImageSourcePath ? { coverImageSourcePath } : undefined,
       );
 
+      const gatingInputProvided =
+        data.subscriptionGatingMode !== undefined || data.minSubscriptionTier !== undefined;
+
       if (coverImageSourcePath) {
         await this.imageAssetService.validateUploadSource('audiobook', coverImageSourcePath);
       }
 
-      await this.prisma.audioBook.update({
-        where: { id },
-        data: updateData
-      });
+      if (gatingInputProvided) {
+        const gatingInput: AudiobookGatingInput = {};
+        if (data.subscriptionGatingMode !== undefined) {
+          gatingInput.subscriptionGatingMode = data.subscriptionGatingMode;
+        }
+        if (data.minSubscriptionTier !== undefined) {
+          gatingInput.minSubscriptionTier = data.minSubscriptionTier;
+        }
+        const gating = await resolveAudiobookGatingUpdate(
+          this.prisma,
+          id,
+          {
+            subscriptionGatingMode: existingAudioBook.subscriptionGatingMode,
+            minSubscriptionTier: existingAudioBook.minSubscriptionTier,
+          },
+          gatingInput,
+        );
+        updateData.subscriptionGatingMode = gating.subscriptionGatingMode;
+        updateData.minSubscriptionTier = gating.minSubscriptionTier;
+
+        await this.prisma.$transaction(async (tx) => {
+          await tx.audioBook.update({ where: { id }, data: updateData });
+          await syncChapterTiersForAudiobook(tx, id, gating);
+        });
+      } else {
+        await this.prisma.audioBook.update({
+          where: { id },
+          data: updateData,
+        });
+      }
 
       if (coverImageSourcePath) {
         const { primaryStorageKey } = await this.imageAssetService.generateAndStoreVariants(
@@ -626,6 +677,9 @@ export class AudioBookService {
       }
 
       emitCacheInvalidation('audiobook', 'updated', id);
+      if (gatingInputProvided) {
+         emitSubscriptionGatingInvalidation({ action: 'updated', audiobookId: id });
+      }
       return this.hydrateOwner(
         await fileUrlService.resolveAudioBookMedia(toAudioBookDto(audiobookWithRelations)),
         accessToken,
@@ -1044,9 +1098,6 @@ export class AudioBookService {
       updateData.scheduledAt = data.scheduledAt;
       updateData.isActive = false;
     }
-    if (data.minSubscriptionTier !== undefined) {
-      updateData.minSubscriptionTier = this.validateMinSubscriptionTier(data.minSubscriptionTier);
-    }
     if (data.owner !== undefined) {
       updateData.ownerType = toPrismaOwnerType(data.owner.type);
       updateData.ownerId = data.owner.id;
@@ -1056,83 +1107,56 @@ export class AudioBookService {
   }
 
   /**
-   * Validate a `minSubscriptionTier` value. Null is allowed (means "no
-   * subscription gating"); any other value must be a non-negative integer.
-   */
-  private validateMinSubscriptionTier(value: number | string | null | undefined): number | null {
-    if (value === null || value === undefined) return null;
-    const parsed = Number(value);
-    if (!Number.isInteger(parsed) || parsed < 0) {
-      throw ApiError.validationError(
-        MessageHandler.getErrorMessage('validation.min_subscription_tier_invalid')
-      );
-    }
-    return parsed;
-  }
-
-  /**
-   * Find the highest active subscription tier for a user.
-   * Only ACTIVE and TRIALING subscriptions count toward access. PAST_DUE is
-   * intentionally excluded for content gating: the user has not paid for the
-   * current period, so access to gated content is revoked until renewal.
-   *
-   * Returns the highest `tierLevel` among the user's qualifying subscriptions,
-   * or `null` if the user has no qualifying subscription.
-   */
-  async getUserHighestActiveTier(userId: string, accessToken: string): Promise<number | null> {
-    return this.subscriptionClient.getUserHighestActiveTier(userId, accessToken);
-  }
-
-  /**
    * Evaluate subscription-tier access for an audiobook without failing the request.
-   * Returns `canAccess: true` when no tier is required or the user qualifies;
-   * otherwise returns the same user-facing messages previously sent as 403 errors.
    */
   async getSubscriptionAccessForAudiobook(
     _audiobookId: string,
-    minSubscriptionTier: number | null | undefined,
+    audiobook: {
+      subscriptionGatingMode: SubscriptionGatingMode;
+      minSubscriptionTier: number | null;
+    },
     userId: string | null,
     accessToken: string | null
-  ): Promise<AudiobookSubscriptionAccessDto> {
-    const requiredTier = minSubscriptionTier ?? null;
-    if (requiredTier === null) {
-      return { canAccess: true };
+  ): Promise<SubscriptionAccessDto> {
+    if (audiobook.subscriptionGatingMode === SubscriptionGatingMode.CHAPTER) {
+      return this.subscriptionAccessService.openAccess();
     }
 
-    if (!userId || !accessToken) {
-      return {
-        canAccess: false,
-        message: MessageHandler.getErrorMessage('forbidden.subscription_required'),
-        requiredTier,
-        userTier: null
-      };
-    }
-
-    const userTier = await this.getUserHighestActiveTier(userId, accessToken);
-    if (userTier === null) {
-      return {
-        canAccess: false,
-        message: MessageHandler.getErrorMessage('forbidden.subscription_required'),
-        requiredTier,
-        userTier: null
-      };
-    }
-
-    if (userTier < requiredTier) {
-      return {
-        canAccess: false,
-        message: MessageHandler.getErrorMessage('forbidden.subscription_tier_too_low'),
-        requiredTier,
-        userTier
-      };
-    }
-
-    return { canAccess: true, requiredTier, userTier };
+    const requiredTier = this.subscriptionAccessService.resolveAudiobookRequiredTier(audiobook);
+    return this.subscriptionAccessService.evaluateAccess(requiredTier, userId, accessToken);
   }
 
   /**
-   * Returns the authenticated user's review rating for an audiobook, or null if none.
+   * @deprecated Use {@link getSubscriptionAccessForAudiobook} for API responses.
    */
+  async assertUserCanAccessBySubscription(
+    audiobookId: string,
+    userId: string | null,
+    accessToken: string | null
+  ): Promise<void> {
+    const audiobook = await this.prisma.audioBook.findUnique({
+      where: { id: audiobookId },
+      select: { id: true, subscriptionGatingMode: true, minSubscriptionTier: true },
+    });
+    if (!audiobook) {
+      throw ApiError.notFound(MessageHandler.getErrorMessage('not_found.audiobook'));
+    }
+
+    const access = await this.getSubscriptionAccessForAudiobook(
+      audiobookId,
+      audiobook,
+      userId,
+      accessToken,
+    );
+    if (!access.canAccess) {
+      throw new ApiError(
+        access.message ?? MessageHandler.getErrorMessage('forbidden.subscription_required'),
+        HttpStatusCode.FORBIDDEN,
+        ErrorType.FORBIDDEN
+      );
+    }
+  }
+
   async getUserReviewRatingForAudiobook(
     audiobookId: string,
     externalUserId: string | null
@@ -1160,37 +1184,5 @@ export class AudioBookService {
     });
 
     return review?.rating ?? null;
-  }
-
-  /**
-   * @deprecated Use {@link getSubscriptionAccessForAudiobook} for API responses.
-   * Throws only when the audiobook does not exist (for scripts/tests that enforce access).
-   */
-  async assertUserCanAccessBySubscription(
-    audiobookId: string,
-    userId: string | null,
-    accessToken: string | null
-  ): Promise<void> {
-    const audiobook = await this.prisma.audioBook.findUnique({
-      where: { id: audiobookId },
-      select: { id: true, minSubscriptionTier: true }
-    });
-    if (!audiobook) {
-      throw ApiError.notFound(MessageHandler.getErrorMessage('not_found.audiobook'));
-    }
-
-    const access = await this.getSubscriptionAccessForAudiobook(
-      audiobookId,
-      (audiobook as { minSubscriptionTier?: number | null }).minSubscriptionTier,
-      userId,
-      accessToken
-    );
-    if (!access.canAccess) {
-      throw new ApiError(
-        access.message ?? MessageHandler.getErrorMessage('forbidden.subscription_required'),
-        HttpStatusCode.FORBIDDEN,
-        ErrorType.FORBIDDEN
-      );
-    }
   }
 }

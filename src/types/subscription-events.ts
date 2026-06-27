@@ -8,3 +8,8 @@ export interface SubscriptionChangedMessage {
    planId: string;
    action: 'created' | 'updated' | 'deleted';
 }
+
+export interface SubscriptionGatingChangedMessage {
+   planId: string;
+   action: 'created' | 'updated' | 'deleted';
+}

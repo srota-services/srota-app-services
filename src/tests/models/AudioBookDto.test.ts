@@ -29,6 +29,7 @@ describe('AudioBookDto', () => {
          isbn: '1234567890123',
          isActive: true,
          isPublic: true,
+         subscriptionGatingMode: 'NONE' as const,
          minSubscriptionTier: null,
          isOfflineAvailable: false,
          createdAt: new Date('2024-01-01'),

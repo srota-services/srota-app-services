@@ -2,16 +2,14 @@
  * AudioBook DTO (Data Transfer Object) classes
  * Provides type-safe data structures for API communication
  */
-import { AudioBook as PrismaAudioBook, AudioBookOwnerType as PrismaAudioBookOwnerType } from '@prisma/client';
+import { AudioBook as PrismaAudioBook, AudioBookOwnerType as PrismaAudioBookOwnerType, SubscriptionGatingMode } from '@prisma/client';
+import { SubscriptionAccessDto } from './SubscriptionAccessDto';
 
-/** Subscription playback access for a single audiobook (detail responses). */
-export interface AudiobookSubscriptionAccessDto {
-  canAccess: boolean;
-  /** Human-readable reason when `canAccess` is false; omitted when access is granted. */
-  message?: string;
-  requiredTier?: number;
-  userTier?: number | null;
-}
+export type { SubscriptionAccessDto };
+/** @deprecated Use SubscriptionAccessDto */
+export type AudiobookSubscriptionAccessDto = SubscriptionAccessDto;
+
+export type SubscriptionGatingModeDto = 'NONE' | 'AUDIOBOOK' | 'CHAPTER';
 
 export type AudioBookOwnerType = 'AUTHOR' | 'ORGANIZATION';
 
@@ -65,6 +63,7 @@ export interface AudioBookDto {
   isbn?: string | undefined;
   isActive: boolean;
   isPublic: boolean;
+  subscriptionGatingMode: SubscriptionGatingModeDto;
   minSubscriptionTier?: number | null | undefined;
   createdAt: Date;
   updatedAt: Date;
@@ -103,6 +102,7 @@ export interface CreateAudioBookDto {
   isbn?: string;
   isActive?: boolean;
   isPublic?: boolean;
+  subscriptionGatingMode?: SubscriptionGatingModeDto;
   minSubscriptionTier?: number | null;
   scheduledAt?: Date;
   moodId?: string | null;
@@ -124,6 +124,7 @@ export interface UpdateAudioBookDto {
   isbn?: string;
   isActive?: boolean;
   isPublic?: boolean;
+  subscriptionGatingMode?: SubscriptionGatingModeDto;
   minSubscriptionTier?: number | null;
   scheduledAt?: Date;
   moodId?: string | null;
@@ -168,6 +169,10 @@ export function toOwnerDto(
   };
 }
 
+export function toSubscriptionGatingModeDto(mode: SubscriptionGatingMode): SubscriptionGatingModeDto {
+  return mode as SubscriptionGatingModeDto;
+}
+
 /**
  * Convert Prisma AudioBook to DTO (owner details hydrated separately).
  */
@@ -190,6 +195,10 @@ export function toAudioBookDto(audiobook: PrismaAudioBook & {
     isbn: audiobook.isbn || undefined,
     isActive: audiobook.isActive,
     isPublic: audiobook.isPublic,
+    subscriptionGatingMode: toSubscriptionGatingModeDto(
+      (audiobook as PrismaAudioBook & { subscriptionGatingMode?: SubscriptionGatingMode }).subscriptionGatingMode
+        ?? SubscriptionGatingMode.NONE,
+    ),
     minSubscriptionTier: (audiobook as PrismaAudioBook & { minSubscriptionTier?: number | null }).minSubscriptionTier ?? null,
     createdAt: audiobook.createdAt,
     updatedAt: audiobook.updatedAt,
