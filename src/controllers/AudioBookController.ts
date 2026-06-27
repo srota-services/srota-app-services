@@ -103,7 +103,7 @@ export class AudioBookController {
       accessToken ?? undefined,
     );
 
-    if (isGuestRequest(req) && (!audiobook.isPublic || !audiobook.isActive)) {
+    if (isGuestRequest(req) && !audiobook.isActive) {
       ResponseHandler.notFound(res, MessageHandler.getErrorMessage('not_found.audiobook'));
       return;
     }

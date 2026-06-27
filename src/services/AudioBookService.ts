@@ -147,7 +147,7 @@ export class AudioBookService {
       const audiobooks = await this.prisma.audioBook.findMany({
         where: {
           moodId,
-          ...(guestCatalogOnly ? { isPublic: true, isActive: true } : {}),
+          ...(guestCatalogOnly ? { isActive: true } : {}),
         },
         orderBy: { title: 'asc' },
         include: {

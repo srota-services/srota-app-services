@@ -18,7 +18,6 @@ export function applyGuestCatalogDefaults(
 
    return {
       ...queryParams,
-      isPublic: true,
       isActive: true,
    };
 }

@@ -196,10 +196,10 @@ export class ChapterController {
 
          const audiobook = await this.prisma.audioBook.findUnique({
             where: { id: chapter.audiobookId },
-            select: { isPublic: true, isActive: true },
+            select: { isActive: true },
          });
 
-         if (!audiobook?.isPublic || !audiobook?.isActive) {
+         if (!audiobook?.isActive) {
             ResponseHandler.notFound(res, MessageHandler.getErrorMessage('not_found.chapter'));
             return;
          }

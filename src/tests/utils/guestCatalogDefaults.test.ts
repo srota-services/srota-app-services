@@ -14,7 +14,7 @@ describe('guestCatalogDefaults', () => {
       expect(isGuestRequest(buildRequest(AuthRole.LISTENER))).toBe(false);
    });
 
-   test('applyGuestCatalogDefaults forces public active filters for guests', () => {
+   test('applyGuestCatalogDefaults forces active filter for guests', () => {
       const params = applyGuestCatalogDefaults(buildRequest(AuthRole.GUEST), {
          page: 1,
          limit: 10,
@@ -22,7 +22,7 @@ describe('guestCatalogDefaults', () => {
          isActive: false,
       });
 
-      expect(params.isPublic).toBe(true);
+      expect(params.isPublic).toBe(false);
       expect(params.isActive).toBe(true);
    });
 

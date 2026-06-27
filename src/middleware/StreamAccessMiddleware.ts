@@ -55,7 +55,7 @@ export function requireChapterStreamAccess(prisma: PrismaClient) {
          const userRole = authReq.user?.role;
 
          if (isGuestRole(userRole)) {
-            if (!chapter.isActive || !chapter.audiobook.isPublic || !chapter.audiobook.isActive) {
+            if (!chapter.isActive || !chapter.audiobook.isActive) {
                ResponseHandler.forbidden(
                   res,
                   MessageHandler.getErrorMessage('forbidden.audiobook_access'),
