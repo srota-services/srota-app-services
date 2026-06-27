@@ -5,9 +5,11 @@
 import Bull from 'bull';
 import { PrismaClient, UserAudioBookType } from '@prisma/client';
 import { ChapterService } from './ChapterService';
-import { ApiError } from '../types/ApiError';
 import { RedisConfigHelper } from '../config/redis';
 import { EntityDeletionCleanupService } from './EntityDeletionCleanupService';
+import { runInTransaction, runWrite } from '../utils/prismaTransaction';
+import { rethrowServiceError } from '../utils/serviceError';
+import { MessageHandler } from '../utils/MessageHandler';
 
 // Job data interfaces
 export interface ProgressCalculationJobData {
@@ -139,13 +141,15 @@ export class BackgroundJobService {
                await this.scheduleOfflineDownload(userProfileId, audiobookId, downloadId, _quality, retryCount + 1);
             } else {
                // Mark download as failed
-               await this.prisma.offlineDownload.update({
-                  where: { id: downloadId },
-                  data: {
-                     status: 'FAILED',
-                     errorMessage: error instanceof Error ? error.message : 'Unknown error',
-                  },
-               });
+               await runWrite(this.prisma, async (tx) =>
+                  tx.offlineDownload.update({
+                     where: { id: downloadId },
+                     data: {
+                        status: 'FAILED',
+                        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+                     },
+                  }),
+               );
             }
 
             throw error;
@@ -216,22 +220,26 @@ export class BackgroundJobService {
 
          try {
             if (type === 'audiobook') {
-               await this.prisma.audioBook.update({
-                  where: { id },
-                  data: {
-                     isActive: true,
-                     scheduledAt: null,
-                  },
-               });
+               await runWrite(this.prisma, async (tx) =>
+                  tx.audioBook.update({
+                     where: { id },
+                     data: {
+                        isActive: true,
+                        scheduledAt: null,
+                     },
+                  }),
+               );
                console.log(`Activated scheduled audiobook ${id}`);
             } else if (type === 'chapter') {
-               await this.prisma.chapter.update({
-                  where: { id },
-                  data: {
-                     isActive: true,
-                     scheduledAt: null,
-                  },
-               });
+               await runWrite(this.prisma, async (tx) =>
+                  tx.chapter.update({
+                     where: { id },
+                     data: {
+                        isActive: true,
+                        scheduledAt: null,
+                     },
+                  }),
+               );
                console.log(`Activated scheduled chapter ${id}`);
             }
          } catch (error) {
@@ -301,8 +309,8 @@ export class BackgroundJobService {
                delay: 2000,
             },
          });
-      } catch (_error) {
-         throw new ApiError('Failed to schedule progress calculation', 500);
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'scheduleAudiobookProgressCalculation' }, MessageHandler.getErrorMessage('internal.default'));
       }
    }
 
@@ -323,8 +331,8 @@ export class BackgroundJobService {
                delay: 1000,
             },
          });
-      } catch (_error) {
-         throw new ApiError('Failed to schedule chapter progress calculation', 500);
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'scheduleChapterProgressCalculation' }, MessageHandler.getErrorMessage('internal.default'));
       }
    }
 
@@ -344,8 +352,8 @@ export class BackgroundJobService {
                delay: 1000,
             },
          });
-      } catch (_error) {
-         throw new ApiError('Failed to schedule duration calculation', 500);
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'scheduleAudiobookDurationCalculation' }, MessageHandler.getErrorMessage('internal.default'));
       }
    }
 
@@ -360,23 +368,26 @@ export class BackgroundJobService {
 
          // If scheduled time is in the past, activate immediately
          if (delay <= 0) {
-            // Activate immediately
             if (type === 'audiobook') {
-               await this.prisma.audioBook.update({
-                  where: { id },
-                  data: {
-                     isActive: true,
-                     scheduledAt: null,
-                  },
-               });
+               await runWrite(this.prisma, async (tx) =>
+                  tx.audioBook.update({
+                     where: { id },
+                     data: {
+                        isActive: true,
+                        scheduledAt: null,
+                     },
+                  }),
+               );
             } else {
-               await this.prisma.chapter.update({
-                  where: { id },
-                  data: {
-                     isActive: true,
-                     scheduledAt: null,
-                  },
-               });
+               await runWrite(this.prisma, async (tx) =>
+                  tx.chapter.update({
+                     where: { id },
+                     data: {
+                        isActive: true,
+                        scheduledAt: null,
+                     },
+                  }),
+               );
             }
             return;
          }
@@ -399,8 +410,8 @@ export class BackgroundJobService {
             delay,
             attempts: 1, // Only attempt once
          });
-      } catch (_error) {
-         throw new ApiError('Failed to schedule activation job', 500);
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'scheduleActivationJob' }, MessageHandler.getErrorMessage('internal.default'));
       }
    }
 
@@ -429,10 +440,12 @@ export class BackgroundJobService {
          const totalDuration = chapters.reduce((sum, chapter) => sum + chapter.duration, 0);
 
          // Update audiobook duration
-         await this.prisma.audioBook.update({
-            where: { id: audiobookId },
-            data: { duration: totalDuration },
-         });
+         await runWrite(this.prisma, async (tx) =>
+            tx.audioBook.update({
+               where: { id: audiobookId },
+               data: { duration: totalDuration },
+            }),
+         );
 
          console.log(`Updated audiobook ${audiobookId} duration to ${totalDuration} seconds`);
       } catch (error) {
@@ -462,8 +475,8 @@ export class BackgroundJobService {
             delay: retryCount > 0 ? retryCount * 5000 : 0, // Exponential backoff for retries
             attempts: 1, // We handle retries manually
          });
-      } catch (_error) {
-         throw new ApiError('Failed to schedule offline download', 500);
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'scheduleOfflineDownload' }, MessageHandler.getErrorMessage('internal.default'));
       }
    }
 
@@ -546,25 +559,6 @@ export class BackgroundJobService {
          const completed =
             totalDurationSeconds > 0 && storedProgress >= totalDurationSeconds * 0.95;
 
-         // Update user-audiobook progress (total seconds listened; never decrease)
-         await this.prisma.userAudioBook.upsert({
-            where: {
-               userProfileId_audiobookId: {
-                  userProfileId,
-                  audiobookId
-               }
-            },
-            update: {
-               progress: storedProgress
-            },
-            create: {
-               userProfileId,
-               audiobookId,
-               type: UserAudioBookType.PURCHASED,
-               progress: storedProgress
-            }
-         });
-
          const existingListeningHistory = await this.prisma.listeningHistory.findUnique({
             where: {
                userProfileId_audiobookId: { userProfileId, audiobookId },
@@ -577,24 +571,43 @@ export class BackgroundJobService {
          const listeningCompleted =
             existingListeningHistory?.completed === true || completed;
 
-         // Update listening history
-         await this.prisma.listeningHistory.upsert({
-            where: {
-               userProfileId_audiobookId: {
+         await runInTransaction(this.prisma, async (tx) => {
+            await tx.userAudioBook.upsert({
+               where: {
+                  userProfileId_audiobookId: {
+                     userProfileId,
+                     audiobookId
+                  }
+               },
+               update: {
+                  progress: storedProgress
+               },
+               create: {
                   userProfileId,
                   audiobookId,
+                  type: UserAudioBookType.PURCHASED,
+                  progress: storedProgress
+               }
+            });
+
+            await tx.listeningHistory.upsert({
+               where: {
+                  userProfileId_audiobookId: {
+                     userProfileId,
+                     audiobookId,
+                  },
                },
-            },
-            update: {
-               currentPosition: storedPosition,
-               completed: listeningCompleted,
-            },
-            create: {
-               userProfileId,
-               audiobookId,
-               currentPosition: storedPosition,
-               completed: listeningCompleted,
-            },
+               update: {
+                  currentPosition: storedPosition,
+                  completed: listeningCompleted,
+               },
+               create: {
+                  userProfileId,
+                  audiobookId,
+                  currentPosition: storedPosition,
+                  completed: listeningCompleted,
+               },
+            });
          });
       } catch (error) {
          // console.error('Failed to calculate audiobook progress:', error);
@@ -609,20 +622,21 @@ export class BackgroundJobService {
       try {
          const chaptersWithProgress = await this.chapterService.getChaptersWithProgress(userProfileId, audiobookId);
 
-         // Update chapter completion status
-         for (const chapter of chaptersWithProgress) {
-            if (chapter.overallProgress && chapter.overallProgress >= 95) {
-               await this.prisma.chapterProgress.updateMany({
-                  where: {
-                     userProfileId,
-                     chapterId: chapter.id,
-                  },
-                  data: {
-                     completed: true,
-                  },
-               });
+         await runInTransaction(this.prisma, async (tx) => {
+            for (const chapter of chaptersWithProgress) {
+               if (chapter.overallProgress && chapter.overallProgress >= 95) {
+                  await tx.chapterProgress.updateMany({
+                     where: {
+                        userProfileId,
+                        chapterId: chapter.id,
+                     },
+                     data: {
+                        completed: true,
+                     },
+                  });
+               }
             }
-         }
+         });
       } catch (error) {
          // console.error('Failed to calculate chapter progress:', error);
          throw error;
@@ -640,13 +654,15 @@ export class BackgroundJobService {
    ): Promise<void> {
       try {
          // Update download status to in progress
-         await this.prisma.offlineDownload.update({
-            where: { id: downloadId },
-            data: {
-               status: 'IN_PROGRESS',
-               progress: 0,
-            },
-         });
+         await runWrite(this.prisma, async (tx) =>
+            tx.offlineDownload.update({
+               where: { id: downloadId },
+               data: {
+                  status: 'IN_PROGRESS',
+                  progress: 0,
+               },
+            }),
+         );
 
          // Get audiobook details
          const audiobook = await this.prisma.audioBook.findUnique({
@@ -666,26 +682,30 @@ export class BackgroundJobService {
             downloadedSize += chunkSize;
             const progress = Math.min((downloadedSize / totalSize) * 100, 100);
 
-            await this.prisma.offlineDownload.update({
-               where: { id: downloadId },
-               data: { progress },
-            });
+            await runWrite(this.prisma, async (tx) =>
+               tx.offlineDownload.update({
+                  where: { id: downloadId },
+                  data: { progress },
+               }),
+            );
 
             // Simulate download time
             await new Promise(resolve => setTimeout(resolve, 100));
          }
 
          // Mark download as completed
-         await this.prisma.offlineDownload.update({
-            where: { id: downloadId },
-            data: {
-               status: 'COMPLETED',
-               progress: 100,
-               filePath: `/downloads/${userProfileId}/${audiobookId}.mp3`, // Simulated path
-               fileSize: audiobook.fileSize,
-               completedAt: new Date(),
-            },
-         });
+         await runWrite(this.prisma, async (tx) =>
+            tx.offlineDownload.update({
+               where: { id: downloadId },
+               data: {
+                  status: 'COMPLETED',
+                  progress: 100,
+                  filePath: `/downloads/${userProfileId}/${audiobookId}.mp3`,
+                  fileSize: audiobook.fileSize,
+                  completedAt: new Date(),
+               },
+            }),
+         );
       } catch (error) {
          // console.error('Failed to process offline download:', error);
          throw error;
@@ -719,10 +739,11 @@ export class BackgroundJobService {
          });
 
          for (const download of expiredDownloads) {
-            // In real implementation, delete the actual file
-            await this.prisma.offlineDownload.delete({
-               where: { id: download.id },
-            });
+            await runWrite(this.prisma, async (tx) =>
+               tx.offlineDownload.delete({
+                  where: { id: download.id },
+               }),
+            );
          }
 
          console.log(`Cleaned up ${expiredDownloads.length} expired downloads`);
@@ -740,14 +761,16 @@ export class BackgroundJobService {
          oldDate.setMonth(oldDate.getMonth() - 6); // 6 months ago
 
          // Clean up old chapter progress for completed chapters
-         const deletedProgress = await this.prisma.chapterProgress.deleteMany({
-            where: {
-               completed: true,
-               updatedAt: {
-                  lt: oldDate,
+         const deletedProgress = await runWrite(this.prisma, async (tx) =>
+            tx.chapterProgress.deleteMany({
+               where: {
+                  completed: true,
+                  updatedAt: {
+                     lt: oldDate,
+                  },
                },
-            },
-         });
+            }),
+         );
 
          console.log(`Cleaned up ${deletedProgress.count} old progress records`);
       } catch (_error) {
@@ -781,8 +804,8 @@ export class BackgroundJobService {
             durationQueue: durationStats,
             activationQueue: activationStats,
          };
-      } catch (_error) {
-         throw new ApiError('Failed to retrieve queue statistics', 500);
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'getQueueStats' }, MessageHandler.getErrorMessage('internal.default'));
       }
    }
 

@@ -8,6 +8,8 @@ import { ApiError } from '../types/ApiError';
 import { MessageHandler } from '../utils/MessageHandler';
 import { HttpStatusCode, ErrorType } from '../types/common';
 import { emitCacheInvalidation } from './DomainEventPublisher';
+import { runWrite } from '../utils/prismaTransaction';
+import { rethrowServiceError } from '../utils/serviceError';
 
 export class GenreService {
    private prisma: PrismaClient;
@@ -34,9 +36,11 @@ export class GenreService {
             );
          }
 
-         const created = await this.prisma.genre.create({
-            data: { name: trimmed }
-         });
+         const created = await runWrite(this.prisma, async (tx) =>
+            tx.genre.create({
+               data: { name: trimmed }
+            }),
+         );
          emitCacheInvalidation('genre', 'created', created.id);
          return toGenreDto(created);
       } catch (error) {
@@ -64,13 +68,8 @@ export class GenreService {
          });
 
          return genres.map(genre => toGenreDto(genre));
-      } catch (_error) {
-         // console.error('Error fetching genres:', error);
-         throw new ApiError(
-            MessageHandler.getErrorMessage('genres.fetch_failed'),
-            HttpStatusCode.INTERNAL_SERVER_ERROR,
-            ErrorType.INTERNAL_ERROR
-         );
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'getAllGenres' }, MessageHandler.getErrorMessage('genres.fetch_failed'));
       }
    }
 
@@ -123,13 +122,8 @@ export class GenreService {
          });
 
          return genre ? toGenreDto(genre) : null;
-      } catch (_error) {
-         // console.error('Error fetching genre by name:', error);
-         throw new ApiError(
-            MessageHandler.getErrorMessage('genres.fetch_failed'),
-            HttpStatusCode.INTERNAL_SERVER_ERROR,
-            ErrorType.INTERNAL_ERROR
-         );
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'getGenreByName' }, MessageHandler.getErrorMessage('genres.fetch_failed'));
       }
    }
 
@@ -164,10 +158,12 @@ export class GenreService {
             );
          }
 
-         const updated = await this.prisma.genre.update({
-            where: { id },
-            data: { name: trimmed }
-         });
+         const updated = await runWrite(this.prisma, async (tx) =>
+            tx.genre.update({
+               where: { id },
+               data: { name: trimmed }
+            }),
+         );
 
          emitCacheInvalidation('genre', 'updated', id);
          return toGenreDto(updated);
@@ -198,7 +194,7 @@ export class GenreService {
             );
          }
 
-         await this.prisma.genre.delete({ where: { id } });
+         await runWrite(this.prisma, async (tx) => tx.genre.delete({ where: { id } }));
          emitCacheInvalidation('genre', 'deleted', id);
          return true;
       } catch (error) {

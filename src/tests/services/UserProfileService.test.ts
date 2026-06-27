@@ -3,6 +3,7 @@
  */
 
 import { UserProfileService } from '../../services/UserProfileService';
+import { attachPrismaTransaction } from '../helpers/prismaMock';
 
 jest.mock('../../services/FileUrlService', () => ({
    fileUrlService: {
@@ -21,14 +22,14 @@ jest.mock('../../utils/UsernameGenerator', () => ({
    })),
 }));
 
-const mockPrisma = {
+const mockPrisma = attachPrismaTransaction({
    userProfile: {
       findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
    },
-} as any;
+}) as any;
 
 describe('UserProfileService', () => {
    let userProfileService: UserProfileService;

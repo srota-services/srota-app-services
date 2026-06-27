@@ -32,6 +32,8 @@ import { ImageAssetService } from './ImageAssetService';
 import { emitCacheInvalidation } from './DomainEventPublisher';
 import { emitSubscriptionGatingInvalidation } from './subscriptionGatingInvalidation';
 import { SubscriptionAccessService } from './SubscriptionAccessService';
+import { runInTransaction, runWrite } from '../utils/prismaTransaction';
+import { rethrowServiceError } from '../utils/serviceError';
 
 export class AudioBookService {
   private prisma: PrismaClient;
@@ -130,8 +132,8 @@ export class AudioBookService {
         audiobooks: await this.hydrateOwners(resolved, accessToken),
         totalCount
       };
-    } catch (_error) {
-      throw ApiError.internalError(MessageHandler.getErrorMessage('internal.fetch_audiobooks'));
+    } catch (error) {
+      rethrowServiceError(error, { operation: 'getAllAudioBooks' }, MessageHandler.getErrorMessage('internal.fetch_audiobooks'));
     }
   }
 
@@ -177,8 +179,8 @@ export class AudioBookService {
       );
 
       return this.hydrateOwners(resolved, accessToken);
-    } catch (_error) {
-      throw ApiError.internalError(MessageHandler.getErrorMessage('internal.fetch_audiobooks'));
+    } catch (error) {
+      rethrowServiceError(error, { operation: 'getAudioBooksByMoodId' }, MessageHandler.getErrorMessage('internal.fetch_audiobooks'));
     }
   }
 
@@ -421,7 +423,7 @@ export class AudioBookService {
         createData.moodId = moodIdForCreate ?? null;
       }
 
-      let audiobook = await this.prisma.$transaction(async (tx) => {
+      let audiobook = await runInTransaction(this.prisma, async (tx) => {
         const created = await tx.audioBook.create({
           data: createData,
         });
@@ -454,10 +456,12 @@ export class AudioBookService {
             audiobook.id,
             coverImageSourcePath,
           );
-          audiobook = await this.prisma.audioBook.update({
-            where: { id: audiobook.id },
-            data: { coverImage: primaryStorageKey },
-          });
+          audiobook = await runWrite(this.prisma, async (tx) =>
+            tx.audioBook.update({
+              where: { id: audiobook.id },
+              data: { coverImage: primaryStorageKey },
+            }),
+          );
         } catch (variantError: unknown) {
           await this.rollbackAudiobookCreate(audiobook.id);
           if (variantError instanceof ApiError) {
@@ -514,16 +518,10 @@ export class AudioBookService {
         accessToken,
       );
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === 'P2002') {
-          throw ApiError.conflict(MessageHandler.getErrorMessage('conflict.audiobook_exists'));
-        }
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw ApiError.conflict(MessageHandler.getErrorMessage('conflict.audiobook_exists'));
       }
-      if (error instanceof ApiError) {
-        throw error;
-      }
-      console.log('error', error);
-      throw ApiError.internalError(MessageHandler.getErrorMessage('internal.create_audiobook'));
+      rethrowServiceError(error, { operation: 'createAudioBook' }, MessageHandler.getErrorMessage('internal.create_audiobook'));
     }
   }
 
@@ -565,6 +563,13 @@ export class AudioBookService {
         await this.imageAssetService.validateUploadSource('audiobook', coverImageSourcePath);
       }
 
+      if (genreIds !== undefined) {
+        await this.validateReferencedIds(genreIds.length > 0 ? genreIds : [], tagIds);
+      } else if (tagIds !== undefined && tagIds.length > 0) {
+        await this.validateReferencedIds([], tagIds);
+      }
+
+      let gating: Awaited<ReturnType<typeof resolveAudiobookGatingUpdate>> | undefined;
       if (gatingInputProvided) {
         const gatingInput: AudiobookGatingInput = {};
         if (data.subscriptionGatingMode !== undefined) {
@@ -573,7 +578,7 @@ export class AudioBookService {
         if (data.minSubscriptionTier !== undefined) {
           gatingInput.minSubscriptionTier = data.minSubscriptionTier;
         }
-        const gating = await resolveAudiobookGatingUpdate(
+        gating = await resolveAudiobookGatingUpdate(
           this.prisma,
           id,
           {
@@ -584,17 +589,40 @@ export class AudioBookService {
         );
         updateData.subscriptionGatingMode = gating.subscriptionGatingMode;
         updateData.minSubscriptionTier = gating.minSubscriptionTier;
-
-        await this.prisma.$transaction(async (tx) => {
-          await tx.audioBook.update({ where: { id }, data: updateData });
-          await syncChapterTiersForAudiobook(tx, id, gating);
-        });
-      } else {
-        await this.prisma.audioBook.update({
-          where: { id },
-          data: updateData,
-        });
       }
+
+      await runInTransaction(this.prisma, async (tx) => {
+        await tx.audioBook.update({ where: { id }, data: updateData });
+        if (gating) {
+          await syncChapterTiersForAudiobook(tx, id, gating);
+        }
+
+        if (genreIds !== undefined) {
+          await tx.audioBookGenre.deleteMany({ where: { audiobookId: id } });
+          if (genreIds.length > 0) {
+            const uniqueGenreIds = [...new Set(genreIds.map((genreId) => genreId.trim()))];
+            await tx.audioBookGenre.createMany({
+              data: uniqueGenreIds.map((genreId) => ({
+                audiobookId: id,
+                genreId,
+              })),
+            });
+          }
+        }
+
+        if (tagIds !== undefined) {
+          await tx.audioBookTag.deleteMany({ where: { audiobookId: id } });
+          if (tagIds.length > 0) {
+            const uniqueTagIds = [...new Set(tagIds.map((tagId) => tagId.trim()))];
+            await tx.audioBookTag.createMany({
+              data: uniqueTagIds.map((tagId) => ({
+                audiobookId: id,
+                tagId,
+              })),
+            });
+          }
+        }
+      });
 
       if (coverImageSourcePath) {
         const { primaryStorageKey } = await this.imageAssetService.generateAndStoreVariants(
@@ -602,54 +630,12 @@ export class AudioBookService {
           id,
           coverImageSourcePath,
         );
-        await this.prisma.audioBook.update({
-          where: { id },
-          data: { coverImage: primaryStorageKey },
-        });
-      }
-
-      // Update AudioBookGenre records if genreIds are provided
-      if (genreIds !== undefined) {
-        // Delete existing genres
-        await this.prisma.audioBookGenre.deleteMany({
-          where: { audiobookId: id }
-        });
-
-        // Create new genres if genreIds array is not empty
-        if (genreIds.length > 0) {
-          await Promise.all(
-            genreIds.map(genreId =>
-              this.prisma.audioBookGenre.create({
-                data: {
-                  audiobookId: id,
-                  genreId: genreId
-                }
-              })
-            )
-          );
-        }
-      }
-
-      // Update AudioBookTag records if tagIds are provided
-      if (tagIds !== undefined) {
-        // Delete existing tags
-        await this.prisma.audioBookTag.deleteMany({
-          where: { audiobookId: id }
-        });
-
-        // Create new tags if tagIds array is not empty
-        if (tagIds.length > 0) {
-          await Promise.all(
-            tagIds.map(tagId =>
-              this.prisma.audioBookTag.create({
-                data: {
-                  audiobookId: id,
-                  tagId: tagId
-                }
-              })
-            )
-          );
-        }
+        await runWrite(this.prisma, async (tx) =>
+          tx.audioBook.update({
+            where: { id },
+            data: { coverImage: primaryStorageKey },
+          }),
+        );
       }
 
       // Schedule activation job if scheduledAt was provided
@@ -692,16 +678,10 @@ export class AudioBookService {
         accessToken,
       );
     } catch (error) {
-      if (error instanceof ApiError) {
-        throw error;
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw ApiError.conflict(MessageHandler.getErrorMessage('conflict.audiobook_exists'));
       }
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === 'P2002') {
-          throw ApiError.conflict(MessageHandler.getErrorMessage('conflict.audiobook_exists'));
-        }
-      }
-      console.log('error', error);
-      throw ApiError.internalError(MessageHandler.getErrorMessage('internal.update_audiobook'));
+      rethrowServiceError(error, { operation: 'updateAudioBook' }, MessageHandler.getErrorMessage('internal.update_audiobook'));
     }
   }
 
@@ -748,23 +728,25 @@ export class AudioBookService {
         : progressSeconds;
 
       // Update user-audiobook progress (never decrease)
-      await this.prisma.userAudioBook.upsert({
-        where: {
-          userProfileId_audiobookId: {
+      await runWrite(this.prisma, async (tx) =>
+        tx.userAudioBook.upsert({
+          where: {
+            userProfileId_audiobookId: {
+              userProfileId,
+              audiobookId: id
+            }
+          },
+          update: {
+            progress: storedProgress
+          },
+          create: {
             userProfileId,
-            audiobookId: id
+            audiobookId: id,
+            type: UserAudioBookType.PURCHASED,
+            progress: storedProgress
           }
-        },
-        update: {
-          progress: storedProgress
-        },
-        create: {
-          userProfileId,
-          audiobookId: id,
-          type: UserAudioBookType.PURCHASED,
-          progress: storedProgress
-        }
-      });
+        }),
+      );
 
       return fileUrlService.resolveAudioBookMedia(toAudioBookDto(audiobook));
     } catch (error) {
@@ -785,10 +767,12 @@ export class AudioBookService {
    */
   async updateOfflineAvailability(id: string, isAvailable: boolean): Promise<AudioBookDto> {
     try {
-      const audiobook = await this.prisma.audioBook.update({
-        where: { id },
-        data: { isOfflineAvailable: isAvailable }
-      });
+      const audiobook = await runWrite(this.prisma, async (tx) =>
+        tx.audioBook.update({
+          where: { id },
+          data: { isOfflineAvailable: isAvailable }
+        }),
+      );
 
       return fileUrlService.resolveAudioBookMedia(toAudioBookDto(audiobook));
     } catch (error) {
@@ -864,8 +848,8 @@ export class AudioBookService {
         audiobooks: await this.hydrateOwners(resolved, accessToken),
         totalCount
       };
-    } catch (_error) {
-      throw ApiError.internalError(MessageHandler.getErrorMessage('internal.fetch_audiobooks'));
+    } catch (error) {
+      rethrowServiceError(error, { operation: 'getAudioBooksByTags' }, MessageHandler.getErrorMessage('internal.fetch_audiobooks'));
     }
   }
 
@@ -902,8 +886,8 @@ export class AudioBookService {
         totalDuration: durationStats._sum.duration ?? 0,
         averageDuration: Math.round(durationStats._avg.duration ?? 0)
       };
-    } catch (_error) {
-      throw ApiError.internalError(MessageHandler.getErrorMessage('internal.fetch_stats'));
+    } catch (error) {
+      rethrowServiceError(error, { operation: 'getAudioBookStats' }, MessageHandler.getErrorMessage('internal.fetch_stats'));
     }
   }
 
@@ -996,11 +980,11 @@ export class AudioBookService {
 
   private async rollbackAudiobookCreate(audiobookId: string): Promise<void> {
     try {
-      await this.prisma.$transaction([
-        this.prisma.audioBookGenre.deleteMany({ where: { audiobookId } }),
-        this.prisma.audioBookTag.deleteMany({ where: { audiobookId } }),
-        this.prisma.audioBook.delete({ where: { id: audiobookId } }),
-      ]);
+      await runInTransaction(this.prisma, async (tx) => {
+        await tx.audioBookGenre.deleteMany({ where: { audiobookId } });
+        await tx.audioBookTag.deleteMany({ where: { audiobookId } });
+        await tx.audioBook.delete({ where: { id: audiobookId } });
+      });
     } catch {
       // Best-effort cleanup after a post-create failure (e.g. image processing).
     }

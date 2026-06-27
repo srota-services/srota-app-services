@@ -8,6 +8,7 @@ import { MessageHandler } from '../utils/MessageHandler';
 import { mediaCleanupService } from './MediaCleanupService';
 import { emitCacheInvalidation } from './DomainEventPublisher';
 import { ImageAssetService } from './ImageAssetService';
+import { runWrite } from '../utils/prismaTransaction';
 
 export class AudiobookMediaCleanupService {
    private imageAssetService: ImageAssetService;
@@ -49,9 +50,11 @@ export class AudiobookMediaCleanupService {
          ...audiobook.offlineDownloads.map((d) => d.filePath),
       ]);
 
-      await this.prisma.audioBook.delete({
-         where: { id: audiobookId },
-      });
+      await runWrite(this.prisma, async (tx) =>
+         tx.audioBook.delete({
+            where: { id: audiobookId },
+         }),
+      );
 
       for (const chapter of audiobook.chapters) {
          emitCacheInvalidation('chapter', 'deleted', chapter.id, { audiobookId });

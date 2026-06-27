@@ -5,9 +5,10 @@
 import { UserAudioBookService } from '../../services/UserAudioBookService';
 import { ApiError } from '../../types/ApiError';
 import { UserAudioBookType } from '@prisma/client';
+import { attachPrismaTransaction } from '../helpers/prismaMock';
 
 // Mock Prisma client
-const mockPrisma = {
+const mockPrisma = attachPrismaTransaction({
    userAudioBook: {
       findUnique: jest.fn(),
       findMany: jest.fn(),
@@ -22,7 +23,7 @@ const mockPrisma = {
    audioBook: {
       findUnique: jest.fn()
    }
-} as any;
+}) as any;
 
 // Mock MessageHandler
 jest.mock('../../utils/MessageHandler', () => ({

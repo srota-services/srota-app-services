@@ -5,6 +5,7 @@
 import { ChapterService } from '../../services/ChapterService';
 import { FileUploadService } from '../../services/FileUploadService';
 import { RabbitMQFactory } from '../../config/rabbitmq';
+import { attachPrismaTransaction } from '../helpers/prismaMock';
 
 jest.mock('../../services/FileUploadService');
 jest.mock('../../config/rabbitmq');
@@ -83,14 +84,14 @@ describe('ChapterService.createChapter upload order', () => {
    });
 
    it('creates chapter record before uploading audio file', async () => {
-      const prisma = {
+      const prisma = attachPrismaTransaction({
          audioBook: { findUnique: jest.fn().mockResolvedValue({ id: 'book-1' }) },
          chapter: {
             findFirst: jest.fn().mockResolvedValue(null),
             create: mockCreate,
             update: mockUpdate,
          },
-      } as unknown as ConstructorParameters<typeof ChapterService>[0];
+      }) as unknown as ConstructorParameters<typeof ChapterService>[0];
 
       const service = new ChapterService(prisma);
       const order: string[] = [];
@@ -191,14 +192,14 @@ describe('ChapterService.createChapter upload order', () => {
          sourceUploadError: 'S3 unavailable',
       });
 
-      const prisma = {
+      const prisma = attachPrismaTransaction({
          audioBook: { findUnique: jest.fn().mockResolvedValue({ id: 'book-1' }) },
          chapter: {
             findFirst: jest.fn().mockResolvedValue(null),
             create: mockCreate,
             update: mockUpdate,
          },
-      } as unknown as ConstructorParameters<typeof ChapterService>[0];
+      }) as unknown as ConstructorParameters<typeof ChapterService>[0];
 
       const service = new ChapterService(prisma);
 
@@ -266,7 +267,7 @@ describe('ChapterService.updateChapter re-transcode', () => {
          updatedAt: new Date(),
       };
 
-      const prisma = {
+      const prisma = attachPrismaTransaction({
          chapter: {
             findUnique: jest.fn().mockResolvedValue(existingChapter),
             findFirst: jest.fn().mockResolvedValue(null),
@@ -280,7 +281,7 @@ describe('ChapterService.updateChapter re-transcode', () => {
                   sourceUploadStatus: 'ready',
                }),
          },
-      } as unknown as ConstructorParameters<typeof ChapterService>[0];
+      }) as unknown as ConstructorParameters<typeof ChapterService>[0];
 
       const service = new ChapterService(prisma);
       await service.updateChapter(

@@ -18,6 +18,7 @@ const mockPrisma = {
       deleteMany: jest.fn(),
       createMany: jest.fn(),
    },
+   $transaction: jest.fn(),
 } as any;
 
 jest.mock('../../utils/MessageHandler', () => ({
@@ -36,6 +37,9 @@ describe('MoodService', () => {
       };
       moodService = new MoodService(mockPrisma, mockAudioBookService as unknown as AudioBookService);
       jest.clearAllMocks();
+      mockPrisma.$transaction.mockImplementation(async (fn: (tx: typeof mockPrisma) => Promise<unknown>) =>
+         fn(mockPrisma),
+      );
    });
 
    describe('createMood', () => {
@@ -227,6 +231,7 @@ describe('MoodService', () => {
 
          expect(result.name).toBe('Peaceful');
          expect(result).not.toHaveProperty('attributes');
+         expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
          expect(mockPrisma.moodAttribute.deleteMany).toHaveBeenCalledWith({ where: { moodId: 'm1' } });
          expect(mockPrisma.moodAttribute.createMany).toHaveBeenCalledWith({
             data: [{ moodId: 'm1', icon: 'sparkle', description: 'Gentle' }],

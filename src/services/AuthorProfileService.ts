@@ -9,6 +9,7 @@ import { ImageAssetService } from './ImageAssetService';
 import { mediaCleanupService } from './MediaCleanupService';
 import { emitCacheInvalidation } from './DomainEventPublisher';
 import fs from 'fs';
+import { runWrite } from '../utils/prismaTransaction';
 
 export class AuthorProfileService {
    private prisma: PrismaClient;
@@ -32,12 +33,14 @@ export class AuthorProfileService {
          return fileUrlService.resolveAuthorProfileMedia(toAuthorProfileDto(existing));
       }
 
-      const profile = await this.prisma.authorProfile.create({
-         data: {
-            authorId: message.authorId,
-            avatar: null,
-         },
-      });
+      const profile = await runWrite(this.prisma, async (tx) =>
+         tx.authorProfile.create({
+            data: {
+               authorId: message.authorId,
+               avatar: null,
+            },
+         }),
+      );
 
       if (message.avatar !== undefined && message.avatar.trim().length > 0) {
          let tempPath: string | undefined;
@@ -48,10 +51,12 @@ export class AuthorProfileService {
                message.authorId,
                tempPath,
             );
-            const updated = await this.prisma.authorProfile.update({
-               where: { authorId: message.authorId },
-               data: { avatar: primaryStorageKey },
-            });
+            const updated = await runWrite(this.prisma, async (tx) =>
+               tx.authorProfile.update({
+                  where: { authorId: message.authorId },
+                  data: { avatar: primaryStorageKey },
+               }),
+            );
             emitCacheInvalidation('author-profile', 'created', updated.id, { authorId: message.authorId });
             return fileUrlService.resolveAuthorProfileMedia(toAuthorProfileDto(updated));
          } finally {
@@ -106,19 +111,23 @@ export class AuthorProfileService {
             authorId,
             avatarSourcePath,
          );
-         updated = await this.prisma.authorProfile.update({
-            where: { authorId },
-            data: { avatar: primaryStorageKey },
-         });
+         updated = await runWrite(this.prisma, async (tx) =>
+            tx.authorProfile.update({
+               where: { authorId },
+               data: { avatar: primaryStorageKey },
+            }),
+         );
       } else if (data.avatar !== undefined) {
          if (data.avatar !== existing.avatar) {
             await this.imageAssetService.deleteAssetsForEntity('author', authorId);
             await mediaCleanupService.deleteStoredFile(existing.avatar);
          }
-         updated = await this.prisma.authorProfile.update({
-            where: { authorId },
-            data: { avatar: data.avatar },
-         });
+         updated = await runWrite(this.prisma, async (tx) =>
+            tx.authorProfile.update({
+               where: { authorId },
+               data: { avatar: data.avatar ?? null },
+            }),
+         );
       }
 
       emitCacheInvalidation('author-profile', 'updated', updated.id, { authorId });
@@ -140,7 +149,7 @@ export class AuthorProfileService {
 
       await this.imageAssetService.deleteAssetsForEntity('author', authorId);
       await mediaCleanupService.deleteStoredFile(existing.avatar);
-      await this.prisma.authorProfile.delete({ where: { authorId } });
+      await runWrite(this.prisma, async (tx) => tx.authorProfile.delete({ where: { authorId } }));
       emitCacheInvalidation('author-profile', 'deleted', existing.id, { authorId });
    }
 }

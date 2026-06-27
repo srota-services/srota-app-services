@@ -16,6 +16,8 @@ import { MessageHandler } from '../utils/MessageHandler';
 import { HttpStatusCode, ErrorType } from '../types/common';
 import { fileUrlService } from './FileUrlService';
 import { emitCacheInvalidation } from './DomainEventPublisher';
+import { runWrite } from '../utils/prismaTransaction';
+import { rethrowServiceError } from '../utils/serviceError';
 
 export class UserAudioBookService {
    private prisma: PrismaClient;
@@ -32,13 +34,15 @@ export class UserAudioBookService {
          await this.validateUserProfileAndAudiobook(data.userProfileId, data.audiobookId);
          await this.assertNoDuplicateRelationship(data.userProfileId, data.audiobookId);
 
-         const created = await this.prisma.userAudioBook.create({
-            data: {
-               userProfileId: data.userProfileId,
-               audiobookId: data.audiobookId,
-               type: UserAudioBookType.PURCHASED
-            }
-         });
+         const created = await runWrite(this.prisma, async (tx) =>
+            tx.userAudioBook.create({
+               data: {
+                  userProfileId: data.userProfileId,
+                  audiobookId: data.audiobookId,
+                  type: UserAudioBookType.PURCHASED
+               }
+            }),
+         );
 
          emitCacheInvalidation('user-audiobook', 'created', created.id);
          return toUserAudioBookDto(created);
@@ -75,13 +79,15 @@ export class UserAudioBookService {
             return toUserAudioBookDto(existing);
          }
 
-         const created = await this.prisma.userAudioBook.create({
-            data: {
-               userProfileId,
-               audiobookId,
-               type: UserAudioBookType.OWNED
-            }
-         });
+         const created = await runWrite(this.prisma, async (tx) =>
+            tx.userAudioBook.create({
+               data: {
+                  userProfileId,
+                  audiobookId,
+                  type: UserAudioBookType.OWNED
+               }
+            }),
+         );
 
          emitCacheInvalidation('user-audiobook', 'created', created.id);
          return toUserAudioBookDto(created);
@@ -186,12 +192,8 @@ export class UserAudioBookService {
             userAudioBooks: userAudioBooks.map(toUserAudioBookDto),
             totalCount
          };
-      } catch (_error) {
-         throw new ApiError(
-            MessageHandler.getErrorMessage('internal.fetch_user_audiobooks'),
-            HttpStatusCode.INTERNAL_SERVER_ERROR,
-            ErrorType.INTERNAL_ERROR
-         );
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'getAllUserAudioBooks' }, MessageHandler.getErrorMessage('internal.fetch_user_audiobooks'));
       }
    }
 
@@ -258,7 +260,7 @@ export class UserAudioBookService {
             );
          }
 
-         await this.prisma.userAudioBook.delete({ where: { id } });
+         await runWrite(this.prisma, async (tx) => tx.userAudioBook.delete({ where: { id } }));
          emitCacheInvalidation('user-audiobook', 'deleted', id);
          return true;
       } catch (error) {

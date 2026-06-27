@@ -21,6 +21,8 @@ import { ApiError } from '../types/ApiError';
 import { MessageHandler } from '../utils/MessageHandler';
 import { HttpStatusCode, ErrorType } from '../types/common';
 import { emitCacheInvalidation } from './DomainEventPublisher';
+import { runWrite } from '../utils/prismaTransaction';
+import { rethrowServiceError } from '../utils/serviceError';
 
 const BOOKMARK_SORT_FIELDS: BookmarkQueryParams['sortBy'][] = ['createdAt', 'updatedAt'];
 
@@ -59,13 +61,15 @@ export class BookmarkService {
       }
 
       try {
-         const bookmark = await this.prisma.bookmark.create({
-            data: {
-               userProfileId,
-               chapterId: bookmarkData.chapterId,
-            },
-            include: bookmarkChapterInclude,
-         });
+         const bookmark = await runWrite(this.prisma, async (tx) =>
+            tx.bookmark.create({
+               data: {
+                  userProfileId,
+                  chapterId: bookmarkData.chapterId,
+               },
+               include: bookmarkChapterInclude,
+            }),
+         );
 
          emitCacheInvalidation('bookmark', 'created', bookmark.id, {
             audiobookId: chapter.audiobookId,
@@ -133,12 +137,8 @@ export class BookmarkService {
             bookmarks: bookmarks.map(toBookmarkDto),
             totalCount,
          };
-      } catch (_error) {
-         throw new ApiError(
-            MessageHandler.getErrorMessage('bookmarks.fetch_failed'),
-            HttpStatusCode.INTERNAL_SERVER_ERROR,
-            ErrorType.INTERNAL_ERROR
-         );
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'getBookmarks' }, MessageHandler.getErrorMessage('bookmarks.fetch_failed'));
       }
    }
 
@@ -197,9 +197,11 @@ export class BookmarkService {
             );
          }
 
-         await this.prisma.bookmark.delete({
-            where: { id: bookmarkId },
-         });
+         await runWrite(this.prisma, async (tx) =>
+            tx.bookmark.delete({
+               where: { id: bookmarkId },
+            }),
+         );
          emitCacheInvalidation('bookmark', 'deleted', bookmarkId, {
             audiobookId: bookmark.chapter.audiobookId,
          });
@@ -242,12 +244,14 @@ export class BookmarkService {
             }
          }
 
-         const note = await this.prisma.note.create({
-            data: {
-               userProfileId,
-               ...noteData,
-            },
-         });
+         const note = await runWrite(this.prisma, async (tx) =>
+            tx.note.create({
+               data: {
+                  userProfileId,
+                  ...noteData,
+               },
+            }),
+         );
 
          emitCacheInvalidation('note', 'created', note.id, {
             ...(note.audiobookId ? { audiobookId: note.audiobookId } : {}),
@@ -349,8 +353,8 @@ export class BookmarkService {
             } as NoteWithRelations)),
             totalCount,
          };
-      } catch (_error) {
-         throw new ApiError('Failed to retrieve notes', 500);
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'getNotes' }, MessageHandler.getErrorMessage('internal.default'));
       }
    }
 
@@ -422,10 +426,12 @@ export class BookmarkService {
             throw new ApiError('Note not found', 404);
          }
 
-         const note = await this.prisma.note.update({
-            where: { id: noteId },
-            data: updateData,
-         });
+         const note = await runWrite(this.prisma, async (tx) =>
+            tx.note.update({
+               where: { id: noteId },
+               data: updateData,
+            }),
+         );
 
          emitCacheInvalidation('note', 'updated', noteId, {
             ...(note.audiobookId ? { audiobookId: note.audiobookId } : {}),
@@ -466,9 +472,11 @@ export class BookmarkService {
             throw new ApiError('Note not found', 404);
          }
 
-         await this.prisma.note.delete({
-            where: { id: noteId },
-         });
+         await runWrite(this.prisma, async (tx) =>
+            tx.note.delete({
+               where: { id: noteId },
+            }),
+         );
          emitCacheInvalidation('note', 'deleted', noteId, {
             ...(note.audiobookId ? { audiobookId: note.audiobookId } : {}),
          });
@@ -577,8 +585,8 @@ export class BookmarkService {
                count: n._count.audiobookId,
             })),
          };
-      } catch (_error) {
-         throw new ApiError('Failed to retrieve bookmark and note statistics', 500);
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'getBookmarkNoteStats' }, MessageHandler.getErrorMessage('internal.default'));
       }
    }
 }

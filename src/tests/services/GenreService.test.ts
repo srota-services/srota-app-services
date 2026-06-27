@@ -4,9 +4,10 @@
  */
 import { GenreService } from '../../services/GenreService';
 import { ApiError } from '../../types/ApiError';
+import { attachPrismaTransaction } from '../helpers/prismaMock';
 
 // Mock Prisma client
-const mockPrisma = {
+const mockPrisma = attachPrismaTransaction({
    genre: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
@@ -15,7 +16,7 @@ const mockPrisma = {
       update: jest.fn(),
       delete: jest.fn(),
    },
-} as any;
+}) as any;
 
 // Mock MessageHandler
 jest.mock('../../utils/MessageHandler', () => ({

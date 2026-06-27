@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import { AudiobookMediaCleanupService } from './AudiobookMediaCleanupService';
 import { mediaCleanupService } from './MediaCleanupService';
 import { emitCacheInvalidation } from './DomainEventPublisher';
+import { runWrite } from '../utils/prismaTransaction';
 
 export class EntityDeletionCleanupService {
    private audiobookMediaCleanup: AudiobookMediaCleanupService;
@@ -35,7 +36,7 @@ export class EntityDeletionCleanupService {
          ...profile.offlineDownloads.map((d) => d.filePath),
       ];
 
-      await this.prisma.userProfile.delete({ where: { userId } });
+      await runWrite(this.prisma, async (tx) => tx.userProfile.delete({ where: { userId } }));
 
       await mediaCleanupService.deleteStoredFiles(mediaPaths);
       emitCacheInvalidation('user-profile', 'deleted', profile.id, { userId });
@@ -61,7 +62,7 @@ export class EntityDeletionCleanupService {
       }
 
       if (authorProfile) {
-         await this.prisma.authorProfile.delete({ where: { authorId } });
+         await runWrite(this.prisma, async (tx) => tx.authorProfile.delete({ where: { authorId } }));
          await mediaCleanupService.deleteStoredFile(authorProfile.avatar);
          emitCacheInvalidation('author-profile', 'deleted', authorProfile.id, { authorId });
       }

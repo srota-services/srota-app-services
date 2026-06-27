@@ -9,6 +9,7 @@ import { fileUrlService } from './FileUrlService';
 import { ImageAssetService } from './ImageAssetService';
 import { mediaCleanupService } from './MediaCleanupService';
 import { emitCacheInvalidation } from './DomainEventPublisher';
+import { runWrite } from '../utils/prismaTransaction';
 
 export class UserProfileService {
    private prisma: PrismaClient;
@@ -70,14 +71,16 @@ export class UserProfileService {
             profileData.avatar = options.avatar;
          }
 
-         const userProfile = await this.prisma.userProfile.create({
-            data: profileData,
-            select: {
-               id: true,
-               userId: true,
-               username: true
-            }
-         });
+         const userProfile = await runWrite(this.prisma, async (tx) =>
+            tx.userProfile.create({
+               data: profileData,
+               select: {
+                  id: true,
+                  userId: true,
+                  username: true
+               }
+            }),
+         );
 
          emitCacheInvalidation('user-profile', 'created', userProfile.id, { userId });
          return {
@@ -156,28 +159,10 @@ export class UserProfileService {
             delete data.avatar;
          }
 
-         let userProfile = await this.prisma.userProfile.update({
-            where: { userId },
-            data,
-            select: {
-               id: true,
-               userId: true,
-               username: true,
-               avatar: true,
-               preferences: true,
-               updatedAt: true
-            }
-         });
-
-         if (avatarSourcePath) {
-            const { primaryStorageKey } = await this.imageAssetService.generateAndStoreVariants(
-               'user',
-               existing.id,
-               avatarSourcePath,
-            );
-            userProfile = await this.prisma.userProfile.update({
+         let userProfile = await runWrite(this.prisma, async (tx) =>
+            tx.userProfile.update({
                where: { userId },
-               data: { avatar: primaryStorageKey },
+               data,
                select: {
                   id: true,
                   userId: true,
@@ -186,7 +171,29 @@ export class UserProfileService {
                   preferences: true,
                   updatedAt: true
                }
-            });
+            }),
+         );
+
+         if (avatarSourcePath) {
+            const { primaryStorageKey } = await this.imageAssetService.generateAndStoreVariants(
+               'user',
+               existing.id,
+               avatarSourcePath,
+            );
+            userProfile = await runWrite(this.prisma, async (tx) =>
+               tx.userProfile.update({
+                  where: { userId },
+                  data: { avatar: primaryStorageKey },
+                  select: {
+                     id: true,
+                     userId: true,
+                     username: true,
+                     avatar: true,
+                     preferences: true,
+                     updatedAt: true
+                  }
+               }),
+            );
          } else if (updateData.avatar !== undefined && updateData.avatar !== existing.avatar) {
             await this.imageAssetService.deleteAssetsForEntity('user', existing.id);
             await mediaCleanupService.deleteStoredFile(existing.avatar);
@@ -214,9 +221,11 @@ export class UserProfileService {
             await mediaCleanupService.deleteStoredFile(existing.avatar);
          }
 
-         await this.prisma.userProfile.delete({
-            where: { userId }
-         });
+         await runWrite(this.prisma, async (tx) =>
+            tx.userProfile.delete({
+               where: { userId }
+            }),
+         );
 
          if (existing) {
             emitCacheInvalidation('user-profile', 'deleted', existing.id, { userId });
