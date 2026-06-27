@@ -3,8 +3,9 @@
  * Provides role-based access control for protected routes
  */
 import { Response, NextFunction } from 'express';
-import { AuthRole, AuthRoleGroups, normalizeAuthRole } from '../constants/authRoles';
+import { AuthRole, AuthRoleGroups, isRegisteredUserRole, normalizeAuthRole } from '../constants/authRoles';
 import { AuthenticatedRequest } from '../types/auth';
+import { MessageHandler } from '../utils/MessageHandler';
 
 /**
  * Check if user has one of the allowed roles
@@ -48,10 +49,37 @@ export function requireGlobalAdmin() {
 }
 
 /**
- * Require any authenticated role (listener, staff, or author)
+ * Require any authenticated role (guest, listener, staff, or author)
  */
 export function requireAuthenticated() {
    return requireRole([...AuthRoleGroups.ALL_AUTHENTICATED]);
+}
+
+/**
+ * Require a registered user (excludes anonymous guest sessions)
+ */
+export function requireRegisteredUser() {
+   return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+      if (!req.user) {
+         res.status(401).json({
+            success: false,
+            message: 'Authentication required',
+            details: 'User must be authenticated to access this resource',
+         });
+         return;
+      }
+
+      if (!isRegisteredUserRole(req.user.role)) {
+         res.status(403).json({
+            success: false,
+            message: MessageHandler.getErrorMessage('forbidden.registered_user_required'),
+            details: 'Please sign up or log in to access this feature',
+         });
+         return;
+      }
+
+      next();
+   };
 }
 
 /**

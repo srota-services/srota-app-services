@@ -8,7 +8,7 @@ import { ChapterController } from '../controllers/ChapterController';
 import { BackgroundJobService } from '../services/BackgroundJobService';
 import { ValidationMiddleware } from '../middleware/ValidationMiddleware';
 import { UploadMiddleware } from '../middleware/UploadMiddleware';
-import { requireContentCreator, requireContentManager } from '../middleware/RoleMiddleware';
+import { requireContentCreator, requireContentManager, requireRegisteredUser } from '../middleware/RoleMiddleware';
 
 export function createChapterRoutes(prisma: PrismaClient): Router {
    const router = Router();
@@ -28,6 +28,7 @@ export function createChapterRoutes(prisma: PrismaClient): Router {
    // Get chapters with progress for an audiobook
    router.get(
       '/audiobooks/:audiobookId/chapters/with-progress',
+      requireRegisteredUser(),
       ValidationMiddleware.validateId,
       chapterController.getChaptersWithProgress
    );
@@ -69,6 +70,7 @@ export function createChapterRoutes(prisma: PrismaClient): Router {
    // Get chapter progress
    router.get(
       '/chapters/:id/progress',
+      requireRegisteredUser(),
       ValidationMiddleware.validateId,
       chapterController.getChapterProgress
    );
@@ -76,6 +78,7 @@ export function createChapterRoutes(prisma: PrismaClient): Router {
    // Update chapter progress
    router.put(
       '/chapters/:id/progress',
+      requireRegisteredUser(),
       ValidationMiddleware.validateId,
       chapterController.updateChapterProgress
    );
@@ -83,6 +86,7 @@ export function createChapterRoutes(prisma: PrismaClient): Router {
    // Get chapter with progress
    router.get(
       '/chapters/:id/with-progress',
+      requireRegisteredUser(),
       ValidationMiddleware.validateId,
       chapterController.getChapterWithProgress
    );
@@ -90,6 +94,7 @@ export function createChapterRoutes(prisma: PrismaClient): Router {
    // Get chapter navigation (previous/next)
    router.get(
       '/chapters/:id/navigation',
+      requireRegisteredUser(),
       ValidationMiddleware.validateId,
       chapterController.getChapterNavigation
    );

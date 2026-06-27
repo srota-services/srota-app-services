@@ -150,7 +150,7 @@ describe('MoodService', () => {
          expect(result.purpose).toBe('Calm is designed for slowing down, breathing deeply, and finding peace.');
          expect(result.attributes).toHaveLength(1);
          expect(result.audiobooks).toEqual([]);
-         expect(mockAudioBookService.getAudioBooksByMoodId).toHaveBeenCalledWith('m1', undefined);
+         expect(mockAudioBookService.getAudioBooksByMoodId).toHaveBeenCalledWith('m1', undefined, false);
          expect(mockPrisma.mood.findUnique).toHaveBeenCalledWith({
             where: { id: 'm1' },
             include: {
@@ -199,7 +199,7 @@ describe('MoodService', () => {
          const result = await moodService.getMoodById('m1', 'token-123');
 
          expect(result.audiobooks).toEqual(audiobooks);
-         expect(mockAudioBookService.getAudioBooksByMoodId).toHaveBeenCalledWith('m1', 'token-123');
+         expect(mockAudioBookService.getAudioBooksByMoodId).toHaveBeenCalledWith('m1', 'token-123', false);
       });
    });
 

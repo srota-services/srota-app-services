@@ -72,7 +72,10 @@ export class ChapterService {
 
          const [chapters, totalCount] = await Promise.all([
             this.prisma.chapter.findMany({
-               where: { audiobookId },
+               where: {
+                  audiobookId,
+                  ...(queryParams?.activeOnly ? { isActive: true } : {}),
+               },
                include: {
                   audiobook: {
                      select: {
@@ -90,7 +93,10 @@ export class ChapterService {
                take: limit,
             }),
             this.prisma.chapter.count({
-               where: { audiobookId },
+               where: {
+                  audiobookId,
+                  ...(queryParams?.activeOnly ? { isActive: true } : {}),
+               },
             }),
          ]);
 

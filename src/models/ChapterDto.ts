@@ -100,6 +100,7 @@ export interface ChapterQueryParams {
    limit?: number;
    sortBy?: string;
    sortOrder?: 'asc' | 'desc';
+   activeOnly?: boolean;
 }
 
 // Chapter response with progress
