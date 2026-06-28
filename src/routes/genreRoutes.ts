@@ -17,7 +17,7 @@ export function createGenreRoutes(prisma: PrismaClient): Router {
     * /api/v1/genres:
     *   get:
     *     summary: Get all available genres
-    *     description: Retrieve a list of all available genres in the system
+    *     description: Retrieve a list of all available genres in the system. Guest users may browse via GET; write operations require registration.
     *     tags: [Genres]
     *     responses:
     *       200:

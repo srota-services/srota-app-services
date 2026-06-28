@@ -300,6 +300,7 @@ errors:
     subscription_required: "This audiobook requires an active subscription"
     subscription_tier_too_low: "Your current subscription plan does not include access to this audiobook"
     registered_user_required: "Please sign up or log in to access this feature"
+    guest_streaming_not_allowed: "Please sign up or log in to play audiobooks"
 
   auth:
     create_user_failed: "Failed to create user account"
