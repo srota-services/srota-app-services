@@ -34,6 +34,39 @@ describe('requireChapterStreamAccess', () => {
       jest.clearAllMocks();
    });
 
+   test('blocks all guest streaming regardless of gating', async () => {
+      const prisma = {
+         chapter: {
+            findUnique: jest.fn().mockResolvedValue({
+               id: 'chapter-1',
+               minSubscriptionTier: null,
+               isActive: true,
+               audiobook: {
+                  subscriptionGatingMode: SubscriptionGatingMode.NONE,
+                  minSubscriptionTier: null,
+                  isPublic: true,
+                  isActive: true,
+               },
+            }),
+         },
+      } as any;
+
+      const req = {
+         params: { chapterId: 'chapter-1' },
+         headers: { authorization: 'Bearer guest-token' },
+         user: { id: 'guest-1', role: AuthRole.GUEST, email: 'guest@test.internal' },
+      } as unknown as AuthenticatedRequest;
+      const res = buildMockResponse();
+
+      await requireChapterStreamAccess(prisma)(req, res, next);
+
+      expect(ResponseHandler.forbidden).toHaveBeenCalledWith(
+         res,
+         'forbidden.guest_streaming_not_allowed',
+      );
+      expect(next).not.toHaveBeenCalled();
+   });
+
    test('blocks guest streaming for subscription-gated chapter', async () => {
       const prisma = {
          chapter: {
@@ -62,38 +95,8 @@ describe('requireChapterStreamAccess', () => {
 
       expect(ResponseHandler.forbidden).toHaveBeenCalledWith(
          res,
-         'forbidden.subscription_required',
+         'forbidden.guest_streaming_not_allowed',
       );
       expect(next).not.toHaveBeenCalled();
-   });
-
-   test('allows guest streaming for ungated public chapter', async () => {
-      const prisma = {
-         chapter: {
-            findUnique: jest.fn().mockResolvedValue({
-               id: 'chapter-1',
-               minSubscriptionTier: null,
-               isActive: true,
-               audiobook: {
-                  subscriptionGatingMode: SubscriptionGatingMode.NONE,
-                  minSubscriptionTier: null,
-                  isPublic: true,
-                  isActive: true,
-               },
-            }),
-         },
-      } as any;
-
-      const req = {
-         params: { chapterId: 'chapter-1' },
-         headers: { authorization: 'Bearer guest-token' },
-         user: { id: 'guest-1', role: AuthRole.GUEST, email: 'guest@test.internal' },
-      } as unknown as AuthenticatedRequest;
-      const res = buildMockResponse();
-
-      await requireChapterStreamAccess(prisma)(req, res, next);
-
-      expect(next).toHaveBeenCalled();
-      expect(ResponseHandler.forbidden).not.toHaveBeenCalled();
    });
 });

@@ -55,13 +55,11 @@ export function requireChapterStreamAccess(prisma: PrismaClient) {
          const userRole = authReq.user?.role;
 
          if (isGuestRole(userRole)) {
-            if (!chapter.isActive || !chapter.audiobook.isActive) {
-               ResponseHandler.forbidden(
-                  res,
-                  MessageHandler.getErrorMessage('forbidden.audiobook_access'),
-               );
-               return;
-            }
+            ResponseHandler.forbidden(
+               res,
+               MessageHandler.getErrorMessage('forbidden.guest_streaming_not_allowed'),
+            );
+            return;
          }
 
          const requiredTier = subscriptionAccessService.resolveChapterRequiredTier(

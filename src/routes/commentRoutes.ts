@@ -5,13 +5,12 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { CommentController } from '../controllers/CommentController';
 import { ValidationMiddleware } from '../middleware/ValidationMiddleware';
-import { requireRegisteredUser } from '../middleware/RoleMiddleware';
 
 export function createCommentRoutes(prisma: PrismaClient): Router {
    const router = Router();
    const controller = new CommentController(prisma);
 
-   router.post('/', requireRegisteredUser(), ValidationMiddleware.validateCreateComment, controller.createComment);
+   router.post('/', ValidationMiddleware.validateCreateComment, controller.createComment);
    router.get(
       '/',
       ValidationMiddleware.validatePagination,
@@ -19,8 +18,8 @@ export function createCommentRoutes(prisma: PrismaClient): Router {
       controller.getComments
    );
    router.get('/:id', ValidationMiddleware.validateId, controller.getCommentById);
-   router.put('/:id', requireRegisteredUser(), ValidationMiddleware.validateId, ValidationMiddleware.validateUpdateComment, controller.updateComment);
-   router.delete('/:id', requireRegisteredUser(), ValidationMiddleware.validateId, controller.deleteComment);
+   router.put('/:id', ValidationMiddleware.validateId, ValidationMiddleware.validateUpdateComment, controller.updateComment);
+   router.delete('/:id', ValidationMiddleware.validateId, controller.deleteComment);
 
    return router;
 }
