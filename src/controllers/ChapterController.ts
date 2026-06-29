@@ -9,7 +9,8 @@ import { ChapterWithRelations } from '../models/ChapterDto';
 import { BackgroundJobService } from '../services/BackgroundJobService';
 import { ContentAuthorizationService } from '../services/ContentAuthorizationService';
 import { ResponseHandler } from '../utils/ResponseHandler';
-import { ChapterQueryParams } from '../models/ChapterDto';
+import { ChapterQueryParams, CreateChapterRequest, UpdateChapterRequest } from '../models/ChapterDto';
+import { parseOptionalMinSubscriptionTierFromForm } from '../utils/subscriptionGatingValidation';
 import { ErrorHandler } from '../middleware/ErrorHandler';
 import { MessageHandler } from '../utils/MessageHandler';
 import { ApiError } from '../types/ApiError';
@@ -86,6 +87,7 @@ export class ChapterController {
                audiobook,
                userId,
                accessToken,
+               authUser?.role ?? null,
             ),
          })),
       );
@@ -266,6 +268,9 @@ export class ChapterController {
     *                 type: string
     *                 format: binary
     *                 description: Audio file (required, max 1GB)
+    *               minSubscriptionTier:
+    *                 type: integer
+    *                 description: Minimum subscription tier when audiobook uses CHAPTER gating mode
     *           examples:
     *             example1:
     *               summary: Example chapter with audio file
@@ -314,7 +319,7 @@ export class ChapterController {
       }
 
       // Parse form-data values (they come as strings from multipart/form-data)
-      const chapterData: any = {
+      const chapterData: CreateChapterRequest = {
          audiobookId: req.body.audiobookId,
          title: req.body.title,
          description: req.body.description || undefined,
@@ -332,6 +337,12 @@ export class ChapterController {
       // Parse scheduledAt if provided (can be ISO string or Date)
       if (req.body.scheduledAt) {
          chapterData.scheduledAt = new Date(req.body.scheduledAt);
+      }
+
+      if (req.body.minSubscriptionTier !== undefined) {
+         chapterData.minSubscriptionTier = parseOptionalMinSubscriptionTierFromForm(
+            req.body.minSubscriptionTier,
+         ) ?? null;
       }
 
       const authReq = req as AuthenticatedRequest;
@@ -406,6 +417,10 @@ export class ChapterController {
     *                 type: string
     *                 format: binary
     *                 description: Audio file (optional)
+    *               coverImage:
+    *                 type: string
+    *                 format: binary
+    *                 description: Chapter cover image (optional)
     *               isActive:
     *                 type: boolean
     *                 description: Whether the chapter is active
@@ -413,6 +428,9 @@ export class ChapterController {
     *                 type: string
     *                 format: date-time
     *                 description: Scheduled activation date
+    *               minSubscriptionTier:
+    *                 type: integer
+    *                 description: Minimum subscription tier when audiobook uses CHAPTER gating mode
     *           examples:
     *             example1:
     *               summary: Update chapter with audio file
@@ -473,11 +491,11 @@ export class ChapterController {
          return;
       }
 
-      const uploadedFile = req.file as Express.Multer.File | undefined;
+      const uploadedFile = (req as any).audioFile as Express.Multer.File | undefined;
       const uploadedCoverImage = (req as any).coverImageFile as Express.Multer.File | undefined;
 
       // Parse form-data values (they come as strings from multipart/form-data)
-      const updateData: any = {};
+      const updateData: UpdateChapterRequest = {};
 
       // Only include fields that are provided
       if (req.body.title !== undefined) {
@@ -503,6 +521,11 @@ export class ChapterController {
       }
       if (req.body.scheduledAt !== undefined && req.body.scheduledAt !== '') {
          updateData.scheduledAt = new Date(req.body.scheduledAt);
+      }
+      if (req.body.minSubscriptionTier !== undefined) {
+         updateData.minSubscriptionTier = parseOptionalMinSubscriptionTierFromForm(
+            req.body.minSubscriptionTier,
+         ) ?? null;
       }
 
       // File data will be handled by uploadedFile

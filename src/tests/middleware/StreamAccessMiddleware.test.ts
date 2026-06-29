@@ -99,4 +99,34 @@ describe('requireChapterStreamAccess', () => {
       );
       expect(next).not.toHaveBeenCalled();
    });
+
+   test('allows author to stream subscription-gated chapter without tier lookup', async () => {
+      const prisma = {
+         chapter: {
+            findUnique: jest.fn().mockResolvedValue({
+               id: 'chapter-1',
+               minSubscriptionTier: null,
+               isActive: true,
+               audiobook: {
+                  subscriptionGatingMode: SubscriptionGatingMode.AUDIOBOOK,
+                  minSubscriptionTier: 2,
+                  isPublic: true,
+                  isActive: true,
+               },
+            }),
+         },
+      } as any;
+
+      const req = {
+         params: { chapterId: 'chapter-1' },
+         headers: { authorization: 'Bearer author-token' },
+         user: { id: 'author-1', role: AuthRole.AUTHOR, email: 'author@example.com' },
+      } as unknown as AuthenticatedRequest;
+      const res = buildMockResponse();
+
+      await requireChapterStreamAccess(prisma)(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      expect(ResponseHandler.forbidden).not.toHaveBeenCalled();
+   });
 });

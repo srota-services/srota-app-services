@@ -23,7 +23,7 @@ import { ImageAssetService } from './ImageAssetService';
 import { fileUrlService } from './FileUrlService';
 import { mediaCleanupService } from './MediaCleanupService';
 import { emitCacheInvalidation } from './DomainEventPublisher';
-import { emitSubscriptionGatingInvalidation } from './subscriptionGatingInvalidation';
+import { emitChapterSubscriptionTierInvalidation } from './chapterSubscriptionTierInvalidation';
 import {
    resolveChapterTierForCreate,
    resolveChapterTierForUpdate,
@@ -57,9 +57,15 @@ export class ChapterService {
       audiobook: { subscriptionGatingMode: SubscriptionGatingMode; minSubscriptionTier: number | null },
       userId: string | null,
       accessToken: string | null,
+      userRole?: string | null,
    ): Promise<SubscriptionAccessDto> {
       const requiredTier = this.subscriptionAccessService.resolveChapterRequiredTier(audiobook, chapter);
-      return this.subscriptionAccessService.evaluateAccess(requiredTier, userId, accessToken);
+      return this.subscriptionAccessService.evaluateAccess(
+         requiredTier,
+         userId,
+         accessToken,
+         userRole,
+      );
    }
 
    /**
@@ -299,8 +305,9 @@ export class ChapterService {
 
          emitCacheInvalidation('chapter', 'created', chapter.id, { audiobookId: chapterData.audiobookId });
          if (chapterTier !== null) {
-            emitSubscriptionGatingInvalidation({
-               action: 'updated',
+            emitChapterSubscriptionTierInvalidation({
+               action: 'created',
+               chapterId: chapter.id,
                audiobookId: chapterData.audiobookId,
             });
          }
@@ -481,9 +488,13 @@ export class ChapterService {
          }
 
          emitCacheInvalidation('chapter', 'updated', chapterId, { audiobookId: existingChapter.audiobookId });
-         if (resolvedTier !== undefined) {
-            emitSubscriptionGatingInvalidation({
+         if (
+            resolvedTier !== undefined &&
+            resolvedTier !== existingChapter.minSubscriptionTier
+         ) {
+            emitChapterSubscriptionTierInvalidation({
                action: 'updated',
+               chapterId,
                audiobookId: existingChapter.audiobookId,
             });
          }

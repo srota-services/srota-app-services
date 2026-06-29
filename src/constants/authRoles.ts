@@ -81,3 +81,12 @@ export function isRegisteredUserRole(role: string | undefined): boolean {
       (allowed) => normalizeAuthRole(allowed) === normalized,
    );
 }
+
+/** Active subscription tier checks apply to LISTENER and GUEST only. */
+export function isSubscriptionGatingEnforcedRole(role: string | undefined): boolean {
+   const normalized = normalizeAuthRole(role);
+   return (
+      normalized === normalizeAuthRole(AuthRole.LISTENER) ||
+      normalized === normalizeAuthRole(AuthRole.GUEST)
+   );
+}

@@ -1107,14 +1107,20 @@ export class AudioBookService {
       minSubscriptionTier: number | null;
     },
     userId: string | null,
-    accessToken: string | null
+    accessToken: string | null,
+    userRole?: string | null,
   ): Promise<SubscriptionAccessDto> {
     if (audiobook.subscriptionGatingMode === SubscriptionGatingMode.CHAPTER) {
       return this.subscriptionAccessService.openAccess();
     }
 
     const requiredTier = this.subscriptionAccessService.resolveAudiobookRequiredTier(audiobook);
-    return this.subscriptionAccessService.evaluateAccess(requiredTier, userId, accessToken);
+    return this.subscriptionAccessService.evaluateAccess(
+      requiredTier,
+      userId,
+      accessToken,
+      userRole,
+    );
   }
 
   /**
@@ -1123,7 +1129,8 @@ export class AudioBookService {
   async assertUserCanAccessBySubscription(
     audiobookId: string,
     userId: string | null,
-    accessToken: string | null
+    accessToken: string | null,
+    userRole?: string | null,
   ): Promise<void> {
     const audiobook = await this.prisma.audioBook.findUnique({
       where: { id: audiobookId },
@@ -1138,6 +1145,7 @@ export class AudioBookService {
       audiobook,
       userId,
       accessToken,
+      userRole,
     );
     if (!access.canAccess) {
       throw new ApiError(

@@ -86,6 +86,7 @@ describe('AudioBookController subscription gating', () => {
          },
          authUserId,
          accessToken,
+         AuthRole.GLOBAL_ADMIN,
       );
       expect(ResponseHandler.success).toHaveBeenCalled();
    });

@@ -2,6 +2,7 @@ import { SubscriptionGatingMode } from '@prisma/client';
 import { ChapterService } from '../../services/ChapterService';
 import { SubscriptionAccessService } from '../../services/SubscriptionAccessService';
 import { ApiError } from '../../types/ApiError';
+import { AuthRole } from '../../constants/authRoles';
 
 jest.mock('../../utils/subscriptionGatingValidation', () => ({
    resolveChapterTierForCreate: jest.fn(),
@@ -28,6 +29,7 @@ describe('ChapterService subscription gating', () => {
          { subscriptionGatingMode: SubscriptionGatingMode.CHAPTER, minSubscriptionTier: null },
          'user-1',
          'token',
+         AuthRole.LISTENER,
       );
 
       expect(access).toMatchObject({ canAccess: true, userTier: 2 });

@@ -6,6 +6,7 @@ import {
    isGlobalAuthorRole,
    isOrgAdminRole,
    isOrgCoordinatorRole,
+   isSubscriptionGatingEnforcedRole,
    normalizeAuthRole,
 } from '../../constants/authRoles';
 
@@ -77,6 +78,15 @@ describe('authRoles', () => {
       test('isOrgCoordinatorRole matches ORG_COORDINATOR only', () => {
          expect(isOrgCoordinatorRole(AuthRole.ORG_COORDINATOR)).toBe(true);
          expect(isOrgCoordinatorRole(AuthRole.ORG_ADMIN)).toBe(false);
+      });
+   });
+
+   describe('isSubscriptionGatingEnforcedRole', () => {
+      test('returns true for LISTENER and GUEST only', () => {
+         expect(isSubscriptionGatingEnforcedRole(AuthRole.LISTENER)).toBe(true);
+         expect(isSubscriptionGatingEnforcedRole(AuthRole.GUEST)).toBe(true);
+         expect(isSubscriptionGatingEnforcedRole(AuthRole.AUTHOR)).toBe(false);
+         expect(isSubscriptionGatingEnforcedRole(AuthRole.GLOBAL_ADMIN)).toBe(false);
       });
    });
 });

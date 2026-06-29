@@ -2,6 +2,7 @@ import { SubscriptionGatingMode } from '@prisma/client';
 import { SubscriptionClient, subscriptionClient } from '../clients/SubscriptionClient';
 import { SubscriptionAccessDto } from '../models/SubscriptionAccessDto';
 import { MessageHandler } from '../utils/MessageHandler';
+import { isSubscriptionGatingEnforcedRole } from '../constants/authRoles';
 
 export interface AudiobookGatingContext {
    subscriptionGatingMode: SubscriptionGatingMode;
@@ -47,10 +48,30 @@ export class SubscriptionAccessService {
       requiredTier: number | null | undefined,
       userId: string | null,
       accessToken: string | null,
+      userRole?: string | null,
    ): Promise<SubscriptionAccessDto> {
       const tier = requiredTier ?? null;
       if (tier === null) {
          return { canAccess: true };
+      }
+
+      if (tier === 0) {
+         if (!isSubscriptionGatingEnforcedRole(userRole ?? undefined)) {
+            return { canAccess: true, requiredTier: 0 };
+         }
+         if (!userId || !accessToken) {
+            return {
+               canAccess: false,
+               message: MessageHandler.getErrorMessage('forbidden.subscription_required'),
+               requiredTier: 0,
+               userTier: null,
+            };
+         }
+         return { canAccess: true, requiredTier: 0 };
+      }
+
+      if (!isSubscriptionGatingEnforcedRole(userRole ?? undefined)) {
+         return { canAccess: true, requiredTier: tier };
       }
 
       if (!userId || !accessToken) {

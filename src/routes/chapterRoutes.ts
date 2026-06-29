@@ -53,8 +53,8 @@ export function createChapterRoutes(prisma: PrismaClient): Router {
       '/chapters/:id',
       requireContentManager(),
       ValidationMiddleware.validateId,
-      UploadMiddleware.handleImageUpload,
-      UploadMiddleware.handleAudioUpload,
+      UploadMiddleware.handleOptionalImageAndAudioUpload,
+      ValidationMiddleware.validateChapterUpdate,
       chapterController.updateChapter
    );
 

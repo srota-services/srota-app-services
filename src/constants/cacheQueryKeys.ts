@@ -108,9 +108,13 @@ function keysForResource(
          return [['audiobooks'], ['user-audiobooks'], ['user-audiobooks', 'me']];
       case 'subscription-gating': {
          const audiobookId = relatedIds['audiobookId'];
+         const chapterId = relatedIds['chapterId'];
          const keys: string[][] = [['audiobooks']];
          if (audiobookId) {
             keys.push(['audiobooks', audiobookId], ['audiobooks', audiobookId, 'chapters']);
+            if (chapterId) {
+               keys.push(['audiobooks', audiobookId, 'chapters', chapterId]);
+            }
          }
          return keys;
       }

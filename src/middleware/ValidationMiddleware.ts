@@ -4,6 +4,8 @@
  */
 import { Request, Response, NextFunction } from 'express';
 import { parseAudioBookOwnerFromBody } from '../utils/parseAudioBookOwner';
+import { parseOptionalMinSubscriptionTierFromForm } from '../utils/subscriptionGatingValidation';
+import { ApiError } from '../types/ApiError';
 import { ResponseHandler } from '../utils/ResponseHandler';
 import { MessageHandler } from '../utils/MessageHandler';
 
@@ -418,6 +420,69 @@ export class ValidationMiddleware {
       ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.description_length'));
       return;
     }
+
+    if (req.body.minSubscriptionTier !== undefined) {
+      try {
+        const parsedTier = parseOptionalMinSubscriptionTierFromForm(req.body.minSubscriptionTier);
+        if (parsedTier !== undefined) {
+          req.body.minSubscriptionTier = parsedTier;
+        } else {
+          delete req.body.minSubscriptionTier;
+        }
+      } catch (error) {
+        if (error instanceof ApiError) {
+          ResponseHandler.validationError(res, error.message);
+          return;
+        }
+        throw error;
+      }
+    }
+
+    next();
+  }
+
+  /**
+   * Validate chapter update request (all fields optional)
+   */
+  static validateChapterUpdate(req: Request, res: Response, next: NextFunction): void {
+    if (req.body.title !== undefined) {
+      if (typeof req.body.title !== 'string' || req.body.title.trim().length === 0) {
+        ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.title_required'));
+        return;
+      }
+      if (req.body.title.length > 200) {
+        ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.title_length'));
+        return;
+      }
+    }
+
+    if (
+      req.body.description !== undefined &&
+      req.body.description !== null &&
+      req.body.description !== '' &&
+      (typeof req.body.description !== 'string' || req.body.description.length > 1000)
+    ) {
+      ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.description_length'));
+      return;
+    }
+
+    if (req.body.minSubscriptionTier !== undefined) {
+      try {
+        const parsedTier = parseOptionalMinSubscriptionTierFromForm(req.body.minSubscriptionTier);
+        if (parsedTier !== undefined) {
+          req.body.minSubscriptionTier = parsedTier;
+        } else {
+          req.body.minSubscriptionTier = null;
+        }
+      } catch (error) {
+        if (error instanceof ApiError) {
+          ResponseHandler.validationError(res, error.message);
+          return;
+        }
+        throw error;
+      }
+    }
+
     next();
   }
 
