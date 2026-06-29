@@ -74,6 +74,7 @@ export function requireChapterStreamAccess(prisma: PrismaClient) {
             requiredTier,
             authReq.user?.id ?? null,
             extractBearerToken(req),
+            userRole,
          );
 
          if (!access.canAccess) {

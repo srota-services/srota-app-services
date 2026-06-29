@@ -210,7 +210,8 @@ describe('AudioBookController', () => {
                minSubscriptionTier: null,
             },
             'auth-user-1',
-            'test-token'
+            'test-token',
+            AuthRole.AUTHOR,
          );
          expect(mockAudioBookService.getUserReviewRatingForAudiobook).toHaveBeenCalledWith(
             'book-123',

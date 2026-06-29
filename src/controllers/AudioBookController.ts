@@ -116,7 +116,8 @@ export class AudioBookController {
           minSubscriptionTier: audiobook.minSubscriptionTier ?? null,
         },
         externalUserId,
-        accessToken
+        accessToken,
+        authReq.user?.role ?? null,
       );
 
     const rating = await this.audioBookService.getUserReviewRatingForAudiobook(

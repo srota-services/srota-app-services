@@ -13,3 +13,9 @@ export interface SubscriptionGatingChangedMessage {
    planId: string;
    action: 'created' | 'updated' | 'deleted';
 }
+
+export interface ChapterGatingChangedMessage {
+   chapterId: string;
+   audiobookId: string;
+   action: 'created' | 'updated' | 'deleted';
+}

@@ -47,6 +47,19 @@ export function validateMinSubscriptionTierValue(
    return parsed;
 }
 
+/** Parse minSubscriptionTier from multipart/form-data (strings) or JSON bodies. */
+export function parseOptionalMinSubscriptionTierFromForm(
+   value: unknown,
+): number | null | undefined {
+   if (value === undefined) {
+      return undefined;
+   }
+   if (value === null || value === '' || value === 'null') {
+      return null;
+   }
+   return validateMinSubscriptionTierValue(value as number | string);
+}
+
 export function inferGatingModeFromLegacyTier(
    minSubscriptionTier: number | null | undefined,
 ): SubscriptionGatingMode {

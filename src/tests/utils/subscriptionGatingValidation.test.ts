@@ -4,6 +4,7 @@ import {
    resolveAudiobookGatingUpdate,
    assertChapterTierAllowed,
    validateMinSubscriptionTierValue,
+   parseOptionalMinSubscriptionTierFromForm,
 } from '../../utils/subscriptionGatingValidation';
 import { ApiError } from '../../types/ApiError';
 
@@ -96,6 +97,21 @@ describe('subscriptionGatingValidation', () => {
    describe('validateMinSubscriptionTierValue', () => {
       it('rejects negative tiers', () => {
          expect(() => validateMinSubscriptionTierValue(-1)).toThrow(ApiError);
+      });
+   });
+
+   describe('parseOptionalMinSubscriptionTierFromForm', () => {
+      it('parses string tier from multipart form data', () => {
+         expect(parseOptionalMinSubscriptionTierFromForm('2')).toBe(2);
+      });
+
+      it('returns undefined when field is omitted', () => {
+         expect(parseOptionalMinSubscriptionTierFromForm(undefined)).toBeUndefined();
+      });
+
+      it('returns null for explicit empty or null form values', () => {
+         expect(parseOptionalMinSubscriptionTierFromForm('')).toBeNull();
+         expect(parseOptionalMinSubscriptionTierFromForm('null')).toBeNull();
       });
    });
 });

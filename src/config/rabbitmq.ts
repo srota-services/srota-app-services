@@ -457,6 +457,54 @@ export class RabbitMQConnection {
    }
 
    /**
+    * Publish chapter gating changed event (chapter minSubscriptionTier change)
+    */
+   public async publishChapterGatingChanged(data: {
+      action: string;
+      chapterId: string;
+      audiobookId: string;
+   }): Promise<boolean> {
+      if (!this.channel) {
+         throw new Error('Channel not available');
+      }
+
+      const routingKey = 'chapter.gating.changed';
+
+      try {
+         const message = Buffer.from(JSON.stringify({
+            action: data.action,
+            chapterId: data.chapterId,
+            audiobookId: data.audiobookId,
+            timestamp: new Date().toISOString(),
+         }));
+
+         const published = this.channel.publish(
+            'chapters',
+            routingKey,
+            message,
+            {
+               persistent: true,
+               messageId: `chapter-gating-${data.chapterId}-${Date.now()}`,
+            },
+         );
+
+         if (published) {
+            rabbitmqLogger.info(
+               { chapterId: data.chapterId, audiobookId: data.audiobookId, routingKey },
+               'Chapter gating changed event published',
+            );
+            return true;
+         }
+
+         rabbitmqLogger.error('Failed to publish chapter gating changed event - channel buffer full');
+         return false;
+      } catch (error) {
+         rabbitmqLogger.error({ err: error, chapterId: data.chapterId }, 'Error publishing chapter gating changed event');
+         return false;
+      }
+   }
+
+   /**
     * Get queue statistics
     */
    public async getQueueStats(): Promise<{

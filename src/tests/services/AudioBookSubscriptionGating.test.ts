@@ -2,6 +2,7 @@ import { SubscriptionGatingMode } from '@prisma/client';
 import { AudioBookService } from '../../services/AudioBookService';
 import { SubscriptionClient } from '../../clients/SubscriptionClient';
 import { HttpStatusCode } from '../../types/common';
+import { AuthRole } from '../../constants/authRoles';
 
 jest.mock('../../utils/MessageHandler', () => ({
    MessageHandler: {
@@ -69,6 +70,7 @@ describe('AudioBookService subscription gating', () => {
             { subscriptionGatingMode: SubscriptionGatingMode.AUDIOBOOK, minSubscriptionTier: 2 },
             null,
             null,
+            AuthRole.LISTENER,
          ),
       ).resolves.toMatchObject({
          canAccess: false,
@@ -84,6 +86,7 @@ describe('AudioBookService subscription gating', () => {
             { subscriptionGatingMode: SubscriptionGatingMode.AUDIOBOOK, minSubscriptionTier: 2 },
             userId,
             accessToken,
+            AuthRole.LISTENER,
          ),
       ).resolves.toMatchObject({
          canAccess: false,
@@ -100,6 +103,7 @@ describe('AudioBookService subscription gating', () => {
             { subscriptionGatingMode: SubscriptionGatingMode.AUDIOBOOK, minSubscriptionTier: 2 },
             userId,
             accessToken,
+            AuthRole.LISTENER,
          ),
       ).resolves.toMatchObject({ canAccess: true, userTier: 2 });
    });
@@ -114,7 +118,7 @@ describe('AudioBookService subscription gating', () => {
       });
       const service = new AudioBookService(prisma, undefined, buildMockSubscriptionClient(1));
       await expect(
-         service.assertUserCanAccessBySubscription(audiobookId, userId, accessToken),
+         service.assertUserCanAccessBySubscription(audiobookId, userId, accessToken, AuthRole.LISTENER),
       ).rejects.toMatchObject({
          statusCode: HttpStatusCode.FORBIDDEN,
       });

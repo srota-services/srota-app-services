@@ -874,7 +874,7 @@ const options: swaggerJsdoc.Options = {
                type: 'object',
                required: ['version', 'service', 'resource', 'action', 'id', 'queryKeys', 'timestamp'],
                description:
-                  'TanStack Query cache-invalidation payload on SSE event `cache-invalidate`. Invalidate each key via queryClient.invalidateQueries({ queryKey }). For `subscription-catalog`, skip when relatedIds.userId does not match the current user; use removeQueries then invalidateQueries so tier-gated audiobook/chapter cache is cleared and refetched. For `subscription-gating`, invalidate when audiobook/chapter gating config changes or when relayed from auth after plan tier definition changes; includes audiobook detail and chapter list keys when relatedIds.audiobookId is set.',
+                  'TanStack Query cache-invalidation payload on SSE event `cache-invalidate`. Invalidate each key via queryClient.invalidateQueries({ queryKey }). For `subscription-catalog`, skip when relatedIds.userId does not match the current user; use removeQueries then invalidateQueries so tier-gated audiobook/chapter cache is cleared and refetched. For `subscription-gating`, invalidate when audiobook/chapter gating config changes (including chapter minSubscriptionTier updates with relatedIds.chapterId and relatedIds.audiobookId) or when relayed from auth after plan tier definition changes.',
                properties: {
                   version: { type: 'integer', example: 1 },
                   service: { type: 'string', enum: ['app'], example: 'app' },
@@ -882,7 +882,7 @@ const options: swaggerJsdoc.Options = {
                      type: 'string',
                      example: 'audiobook',
                      description:
-                        'Stable entity name (audiobook, chapter, playlist, subscription-catalog, subscription-gating, …). subscription-catalog is relayed from auth when a user effective subscription tier changes. subscription-gating is emitted locally when gating mode/tier changes on audiobooks/chapters, or relayed from auth when plan tier definitions change.',
+                        'Stable entity name (audiobook, chapter, playlist, subscription-catalog, subscription-gating, …). subscription-catalog is relayed from auth when a user effective subscription tier changes. subscription-gating is emitted locally when gating mode/tier changes on audiobooks/chapters (chapter tier updates include relatedIds.chapterId), relayed from auth when plan tier definitions change, and relayed to auth SSE when chapter tier changes are published from app-service.',
                   },
                   action: { type: 'string', enum: ['created', 'updated', 'deleted'] },
                   id: { type: 'string' },

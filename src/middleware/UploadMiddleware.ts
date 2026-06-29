@@ -449,6 +449,31 @@ export class UploadMiddleware {
       });
    };
 
+   // Static method to handle optional combined image and audio uploads (for chapter/audiobook updates)
+   // coverImage and file are both optional; parses multipart once so body fields are preserved
+   static handleOptionalImageAndAudioUpload = (req: Request, res: Response, next: NextFunction): void => {
+      uploadImageAndAudio(req, res, (err) => {
+         if (err) {
+            return handleUploadError(err, req, res, next);
+         }
+
+         const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+         if (files) {
+            const coverImageFiles = files['coverImage'];
+            const audioFiles = files['file'] || files['audio'];
+
+            if (coverImageFiles && coverImageFiles.length > 0) {
+               (req as any).coverImageFile = coverImageFiles[0];
+            }
+            if (audioFiles && audioFiles.length > 0) {
+               (req as any).audioFile = audioFiles[0];
+            }
+         }
+
+         next();
+      });
+   };
+
    // Static method to handle optional image uploads
    // Only processes upload if client is sending an image file
    // If no image is sent, the middleware passes through without error

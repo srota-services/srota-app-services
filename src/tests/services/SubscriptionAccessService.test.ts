@@ -1,5 +1,6 @@
 import { SubscriptionGatingMode } from '@prisma/client';
 import { SubscriptionAccessService } from '../../services/SubscriptionAccessService';
+import { AuthRole } from '../../constants/authRoles';
 
 function buildMockSubscriptionClient(tier: number | null) {
    return {
@@ -59,10 +60,49 @@ describe('SubscriptionAccessService', () => {
 
    it('evaluateAccess grants access when tier qualifies', async () => {
       const service = new SubscriptionAccessService(buildMockSubscriptionClient(2));
-      await expect(service.evaluateAccess(2, userId, accessToken)).resolves.toMatchObject({
+      await expect(
+         service.evaluateAccess(2, userId, accessToken, AuthRole.LISTENER),
+      ).resolves.toMatchObject({
          canAccess: true,
          userTier: 2,
       });
+   });
+
+   it('evaluateAccess grants access when required tier is 0 and user has no subscription', async () => {
+      const client = buildMockSubscriptionClient(null);
+      const service = new SubscriptionAccessService(client);
+      await expect(
+         service.evaluateAccess(0, userId, accessToken, AuthRole.LISTENER),
+      ).resolves.toMatchObject({
+         canAccess: true,
+         requiredTier: 0,
+      });
+      expect(client.getUserHighestActiveTier).not.toHaveBeenCalled();
+   });
+
+   it('evaluateAccess denies access when required tier is 0 and user is not logged in', async () => {
+      const client = buildMockSubscriptionClient(null);
+      const service = new SubscriptionAccessService(client);
+      await expect(
+         service.evaluateAccess(0, null, null, AuthRole.LISTENER),
+      ).resolves.toMatchObject({
+         canAccess: false,
+         requiredTier: 0,
+         userTier: null,
+      });
+      expect(client.getUserHighestActiveTier).not.toHaveBeenCalled();
+   });
+
+   it('evaluateAccess bypasses subscription lookup for non-listener roles', async () => {
+      const client = buildMockSubscriptionClient(2);
+      const service = new SubscriptionAccessService(client);
+      await expect(
+         service.evaluateAccess(2, userId, accessToken, AuthRole.AUTHOR),
+      ).resolves.toMatchObject({
+         canAccess: true,
+         requiredTier: 2,
+      });
+      expect(client.getUserHighestActiveTier).not.toHaveBeenCalled();
    });
 
    it('openAccess always grants audiobook detail access', () => {
