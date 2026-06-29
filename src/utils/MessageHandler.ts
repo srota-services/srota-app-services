@@ -72,6 +72,7 @@ interface MessagesConfig {
          insufficient_permissions: string;
          subscription_required?: string;
          subscription_tier_too_low?: string;
+         subscription_tier_too_low_chapter?: string;
       };
       internal: {
          default: string;
@@ -206,7 +207,9 @@ export class MessageHandler {
                insufficient_permissions: 'Insufficient permissions',
                subscription_required: 'This audiobook requires an active subscription',
                subscription_tier_too_low:
-                  'Your current subscription plan does not include access to this audiobook'
+                  'Your current subscription plan does not include access to this audiobook.',
+               subscription_tier_too_low_chapter:
+                  'Your current subscription plan does not include access to this chapter.',
             },
             internal: {
                default: 'Internal server error',

@@ -1,4 +1,5 @@
 import axios, { AxiosError } from 'axios';
+import { SubscriptionTierLevel } from '@prisma/client';
 import { config } from '../config/env';
 
 export class SubscriptionClient {
@@ -8,9 +9,9 @@ export class SubscriptionClient {
       this.baseUrl = baseUrl.replace(/\/$/, '');
    }
 
-   async getUserHighestActiveTier(_userId: string, accessToken: string): Promise<number | null> {
+   async getUserHighestActiveTier(_userId: string, accessToken: string): Promise<SubscriptionTierLevel | null> {
       try {
-         const response = await axios.get<{ tier: number | null }>(
+         const response = await axios.get<{ tier: SubscriptionTierLevel | null }>(
             `${this.baseUrl}/auth/subscriptions/me/tier`,
             {
                headers: { Authorization: `Bearer ${accessToken}` },

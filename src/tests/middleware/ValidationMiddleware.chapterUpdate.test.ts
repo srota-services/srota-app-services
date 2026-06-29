@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { SubscriptionTierLevel } from '@prisma/client';
 import { ValidationMiddleware } from '../../middleware/ValidationMiddleware';
 import { ResponseHandler } from '../../utils/ResponseHandler';
 
@@ -41,7 +42,7 @@ describe('ValidationMiddleware.validateChapterUpdate', () => {
       ValidationMiddleware.validateChapterUpdate(req, res, next);
 
       expect(next).toHaveBeenCalled();
-      expect(req.body.minSubscriptionTier).toBe(2);
+      expect(req.body.minSubscriptionTier).toBe(SubscriptionTierLevel.STANDARD);
       expect(ResponseHandler.validationError).not.toHaveBeenCalled();
    });
 

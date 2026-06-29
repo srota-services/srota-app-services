@@ -1,4 +1,4 @@
-import { SubscriptionGatingMode } from '@prisma/client';
+import { SubscriptionGatingMode, SubscriptionTierLevel } from '@prisma/client';
 import { AudioBookService } from '../../services/AudioBookService';
 import { SubscriptionClient } from '../../clients/SubscriptionClient';
 import { HttpStatusCode } from '../../types/common';
@@ -15,7 +15,7 @@ function buildMockPrisma(opts: {
    audiobook?: {
       id: string;
       subscriptionGatingMode: SubscriptionGatingMode;
-      minSubscriptionTier: number | null;
+      minSubscriptionTier: SubscriptionTierLevel | null;
    } | null;
 }) {
    return {
@@ -25,7 +25,7 @@ function buildMockPrisma(opts: {
    } as any;
 }
 
-function buildMockSubscriptionClient(tier: number | null): SubscriptionClient {
+function buildMockSubscriptionClient(tier: SubscriptionTierLevel | null): SubscriptionClient {
    return {
       getUserHighestActiveTier: jest.fn().mockResolvedValue(tier),
    } as unknown as SubscriptionClient;
@@ -36,7 +36,7 @@ describe('AudioBookService subscription gating', () => {
    const userId = 'auth-user-uuid';
    const accessToken = 'test-token';
 
-   it('grants access when no minSubscriptionTier in NONE mode', async () => {
+   it('grants access when no minSubscriptionTier in NONE mode (logged-in LISTENER)', async () => {
       const subClient = buildMockSubscriptionClient(null);
       const service = new AudioBookService(buildMockPrisma({}), undefined, subClient);
       await expect(
@@ -45,45 +45,47 @@ describe('AudioBookService subscription gating', () => {
             { subscriptionGatingMode: SubscriptionGatingMode.NONE, minSubscriptionTier: null },
             userId,
             accessToken,
+            AuthRole.LISTENER,
          ),
       ).resolves.toEqual({ canAccess: true });
       expect(subClient.getUserHighestActiveTier).not.toHaveBeenCalled();
    });
 
-   it('returns open access in CHAPTER mode regardless of tier', async () => {
+   it('returns open access in CHAPTER mode for non-gating roles', async () => {
       const service = new AudioBookService(buildMockPrisma({}), undefined, buildMockSubscriptionClient(null));
       await expect(
          service.getSubscriptionAccessForAudiobook(
             audiobookId,
             { subscriptionGatingMode: SubscriptionGatingMode.CHAPTER, minSubscriptionTier: null },
-            null,
-            null,
+            userId,
+            accessToken,
+            AuthRole.AUTHOR,
          ),
       ).resolves.toEqual({ canAccess: true });
    });
 
-   it('returns subscription_required without user or token in AUDIOBOOK mode', async () => {
+   it('returns login_required when user is not logged in', async () => {
       const service = new AudioBookService(buildMockPrisma({}), undefined, buildMockSubscriptionClient(null));
       await expect(
          service.getSubscriptionAccessForAudiobook(
             audiobookId,
-            { subscriptionGatingMode: SubscriptionGatingMode.AUDIOBOOK, minSubscriptionTier: 2 },
+            { subscriptionGatingMode: SubscriptionGatingMode.AUDIOBOOK, minSubscriptionTier: SubscriptionTierLevel.STANDARD },
             null,
             null,
             AuthRole.LISTENER,
          ),
       ).resolves.toMatchObject({
          canAccess: false,
-         message: 'forbidden.subscription_required',
+         message: 'forbidden.login_required',
       });
    });
 
    it('returns tier_too_low when tier is below required in AUDIOBOOK mode', async () => {
-      const service = new AudioBookService(buildMockPrisma({}), undefined, buildMockSubscriptionClient(1));
+      const service = new AudioBookService(buildMockPrisma({}), undefined, buildMockSubscriptionClient(SubscriptionTierLevel.BASE));
       await expect(
          service.getSubscriptionAccessForAudiobook(
             audiobookId,
-            { subscriptionGatingMode: SubscriptionGatingMode.AUDIOBOOK, minSubscriptionTier: 2 },
+            { subscriptionGatingMode: SubscriptionGatingMode.AUDIOBOOK, minSubscriptionTier: SubscriptionTierLevel.STANDARD },
             userId,
             accessToken,
             AuthRole.LISTENER,
@@ -91,21 +93,21 @@ describe('AudioBookService subscription gating', () => {
       ).resolves.toMatchObject({
          canAccess: false,
          message: 'forbidden.subscription_tier_too_low',
-         userTier: 1,
+         userTier: SubscriptionTierLevel.BASE,
       });
    });
 
    it('grants access when tier qualifies in AUDIOBOOK mode', async () => {
-      const service = new AudioBookService(buildMockPrisma({}), undefined, buildMockSubscriptionClient(2));
+      const service = new AudioBookService(buildMockPrisma({}), undefined, buildMockSubscriptionClient(SubscriptionTierLevel.STANDARD));
       await expect(
          service.getSubscriptionAccessForAudiobook(
             audiobookId,
-            { subscriptionGatingMode: SubscriptionGatingMode.AUDIOBOOK, minSubscriptionTier: 2 },
+            { subscriptionGatingMode: SubscriptionGatingMode.AUDIOBOOK, minSubscriptionTier: SubscriptionTierLevel.STANDARD },
             userId,
             accessToken,
             AuthRole.LISTENER,
          ),
-      ).resolves.toMatchObject({ canAccess: true, userTier: 2 });
+      ).resolves.toMatchObject({ canAccess: true, userTier: SubscriptionTierLevel.STANDARD });
    });
 
    it('assertUserCanAccessBySubscription throws FORBIDDEN when denied in AUDIOBOOK mode', async () => {
@@ -113,10 +115,10 @@ describe('AudioBookService subscription gating', () => {
          audiobook: {
             id: audiobookId,
             subscriptionGatingMode: SubscriptionGatingMode.AUDIOBOOK,
-            minSubscriptionTier: 2,
+            minSubscriptionTier: SubscriptionTierLevel.STANDARD,
          },
       });
-      const service = new AudioBookService(prisma, undefined, buildMockSubscriptionClient(1));
+      const service = new AudioBookService(prisma, undefined, buildMockSubscriptionClient(SubscriptionTierLevel.BASE));
       await expect(
          service.assertUserCanAccessBySubscription(audiobookId, userId, accessToken, AuthRole.LISTENER),
       ).rejects.toMatchObject({
@@ -124,7 +126,7 @@ describe('AudioBookService subscription gating', () => {
       });
    });
 
-   it('assertUserCanAccessBySubscription does not throw in CHAPTER mode', async () => {
+   it('assertUserCanAccessBySubscription does not throw for AUTHOR in CHAPTER mode', async () => {
       const prisma = buildMockPrisma({
          audiobook: {
             id: audiobookId,
@@ -134,7 +136,7 @@ describe('AudioBookService subscription gating', () => {
       });
       const service = new AudioBookService(prisma, undefined, buildMockSubscriptionClient(null));
       await expect(
-         service.assertUserCanAccessBySubscription(audiobookId, userId, accessToken),
+         service.assertUserCanAccessBySubscription(audiobookId, userId, accessToken, AuthRole.AUTHOR),
       ).resolves.toBeUndefined();
    });
 });

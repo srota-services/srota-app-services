@@ -1,4 +1,4 @@
-import { SubscriptionGatingMode } from '@prisma/client';
+import { SubscriptionGatingMode, SubscriptionTierLevel } from '@prisma/client';
 import { ChapterService } from '../../services/ChapterService';
 import { SubscriptionAccessService } from '../../services/SubscriptionAccessService';
 import { ApiError } from '../../types/ApiError';
@@ -20,35 +20,36 @@ import { resolveChapterTierForCreate } from '../../utils/subscriptionGatingValid
 describe('ChapterService subscription gating', () => {
    it('getSubscriptionAccessForChapter evaluates chapter tier in CHAPTER mode', async () => {
       const subscriptionAccessService = new SubscriptionAccessService({
-         getUserHighestActiveTier: jest.fn().mockResolvedValue(2),
+         getUserHighestActiveTier: jest.fn().mockResolvedValue(SubscriptionTierLevel.STANDARD),
       } as any);
       const service = new ChapterService({} as any, undefined, subscriptionAccessService);
 
       const access = await service.getSubscriptionAccessForChapter(
-         { minSubscriptionTier: 2 },
+         { minSubscriptionTier: SubscriptionTierLevel.STANDARD },
          { subscriptionGatingMode: SubscriptionGatingMode.CHAPTER, minSubscriptionTier: null },
          'user-1',
          'token',
          AuthRole.LISTENER,
       );
 
-      expect(access).toMatchObject({ canAccess: true, userTier: 2 });
+      expect(access).toMatchObject({ canAccess: true, userTier: SubscriptionTierLevel.STANDARD });
    });
 
    it('getSubscriptionAccessForChapter uses audiobook tier in AUDIOBOOK mode', async () => {
       const subscriptionAccessService = new SubscriptionAccessService({
-         getUserHighestActiveTier: jest.fn().mockResolvedValue(2),
+         getUserHighestActiveTier: jest.fn().mockResolvedValue(SubscriptionTierLevel.STANDARD),
       } as any);
       const service = new ChapterService({} as any, undefined, subscriptionAccessService);
 
       const access = await service.getSubscriptionAccessForChapter(
          { minSubscriptionTier: null },
-         { subscriptionGatingMode: SubscriptionGatingMode.AUDIOBOOK, minSubscriptionTier: 1 },
+         { subscriptionGatingMode: SubscriptionGatingMode.AUDIOBOOK, minSubscriptionTier: SubscriptionTierLevel.BASE },
          'user-1',
          'token',
+         AuthRole.LISTENER,
       );
 
-      expect(access).toMatchObject({ canAccess: true, requiredTier: 1 });
+      expect(access).toMatchObject({ canAccess: true, requiredTier: SubscriptionTierLevel.BASE });
    });
 
    it('createChapter rejects tier when resolveChapterTierForCreate throws', async () => {
@@ -80,7 +81,7 @@ describe('ChapterService subscription gating', () => {
             startPosition: 0,
             endPosition: 100,
             coverImage: 'cover.jpg',
-            minSubscriptionTier: 2,
+            minSubscriptionTier: SubscriptionTierLevel.STANDARD,
          }),
       ).rejects.toBeInstanceOf(ApiError);
    });

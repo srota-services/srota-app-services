@@ -1,17 +1,20 @@
-import { SubscriptionGatingMode } from '@prisma/client';
+import { SubscriptionGatingMode, SubscriptionTierLevel } from '@prisma/client';
 import { SubscriptionClient, subscriptionClient } from '../clients/SubscriptionClient';
 import { SubscriptionAccessDto } from '../models/SubscriptionAccessDto';
 import { MessageHandler } from '../utils/MessageHandler';
-import { isSubscriptionGatingEnforcedRole } from '../constants/authRoles';
+import { isSubscriptionGatingEnforcedRole, isGuestRole } from '../constants/authRoles';
+import { SUBSCRIPTION_TIER_ORDER } from '../constants/subscriptionTierLevel';
 
 export interface AudiobookGatingContext {
    subscriptionGatingMode: SubscriptionGatingMode;
-   minSubscriptionTier: number | null;
+   minSubscriptionTier: SubscriptionTierLevel | null;
 }
 
 export interface ChapterGatingContext {
-   minSubscriptionTier: number | null;
+   minSubscriptionTier: SubscriptionTierLevel | null;
 }
+
+export type SubscriptionGatedContentType = 'audiobook' | 'chapter';
 
 export class SubscriptionAccessService {
    private subscriptionClient: SubscriptionClient;
@@ -20,11 +23,11 @@ export class SubscriptionAccessService {
       this.subscriptionClient = subscriptionClientInstance;
    }
 
-   async getUserHighestActiveTier(userId: string, accessToken: string): Promise<number | null> {
+   async getUserHighestActiveTier(userId: string, accessToken: string): Promise<SubscriptionTierLevel | null> {
       return this.subscriptionClient.getUserHighestActiveTier(userId, accessToken);
    }
 
-   resolveAudiobookRequiredTier(audiobook: AudiobookGatingContext): number | null {
+   resolveAudiobookRequiredTier(audiobook: AudiobookGatingContext): SubscriptionTierLevel | null {
       if (audiobook.subscriptionGatingMode !== SubscriptionGatingMode.AUDIOBOOK) {
          return null;
       }
@@ -34,7 +37,7 @@ export class SubscriptionAccessService {
    resolveChapterRequiredTier(
       audiobook: AudiobookGatingContext,
       chapter: ChapterGatingContext,
-   ): number | null {
+   ): SubscriptionTierLevel | null {
       if (audiobook.subscriptionGatingMode === SubscriptionGatingMode.AUDIOBOOK) {
          return audiobook.minSubscriptionTier ?? null;
       }
@@ -45,44 +48,35 @@ export class SubscriptionAccessService {
    }
 
    async evaluateAccess(
-      requiredTier: number | null | undefined,
+      requiredTier: SubscriptionTierLevel | null | undefined,
       userId: string | null,
       accessToken: string | null,
       userRole?: string | null,
+      contentType: SubscriptionGatedContentType = 'audiobook',
    ): Promise<SubscriptionAccessDto> {
       const tier = requiredTier ?? null;
-      if (tier === null) {
-         return { canAccess: true };
-      }
 
-      if (tier === 0) {
-         if (!isSubscriptionGatingEnforcedRole(userRole ?? undefined)) {
-            return { canAccess: true, requiredTier: 0 };
-         }
-         if (!userId || !accessToken) {
-            return {
-               canAccess: false,
-               message: MessageHandler.getErrorMessage('forbidden.subscription_required'),
-               requiredTier: 0,
-               userTier: null,
-            };
-         }
-         return { canAccess: true, requiredTier: 0 };
-      }
-
-      if (!isSubscriptionGatingEnforcedRole(userRole ?? undefined)) {
-         return { canAccess: true, requiredTier: tier };
-      }
-
-      if (!userId || !accessToken) {
+      // Gate 1: all content requires a registered login — GUEST and unauthenticated users are denied.
+      if (!userId || !accessToken || isGuestRole(userRole ?? undefined)) {
          return {
             canAccess: false,
-            message: MessageHandler.getErrorMessage('forbidden.subscription_required'),
-            requiredTier: tier,
+            message: MessageHandler.getErrorMessage('forbidden.login_required'),
+            ...(tier !== null ? { requiredTier: tier } : {}),
             userTier: null,
          };
       }
 
+      // Gate 2: non-gating roles (AUTHOR, ADMIN, ORG) bypass subscription checks entirely.
+      if (!isSubscriptionGatingEnforcedRole(userRole ?? undefined)) {
+         return { canAccess: true, ...(tier !== null ? { requiredTier: tier } : {}) };
+      }
+
+      // Gate 3: no tier required (NONE mode) — logged-in LISTENER passes without a subscription.
+      if (tier === null) {
+         return { canAccess: true };
+      }
+
+      // Gate 4: subscription tier comparison.
       const userTier = await this.getUserHighestActiveTier(userId, accessToken);
       if (userTier === null) {
          return {
@@ -93,10 +87,14 @@ export class SubscriptionAccessService {
          };
       }
 
-      if (userTier < tier) {
+      if (SUBSCRIPTION_TIER_ORDER[userTier]! < SUBSCRIPTION_TIER_ORDER[tier]!) {
+         const tierTooLowKey =
+            contentType === 'chapter'
+               ? 'forbidden.subscription_tier_too_low_chapter'
+               : 'forbidden.subscription_tier_too_low';
          return {
             canAccess: false,
-            message: MessageHandler.getErrorMessage('forbidden.subscription_tier_too_low'),
+            message: MessageHandler.getErrorMessage(tierTooLowKey),
             requiredTier: tier,
             userTier,
          };

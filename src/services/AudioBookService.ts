@@ -2,7 +2,7 @@
  * AudioBook Service Layer
  * Handles business logic and database operations following OOP principles
  */
-import { PrismaClient, Prisma, UserAudioBookType, SubscriptionGatingMode } from '@prisma/client';
+import { PrismaClient, Prisma, UserAudioBookType, SubscriptionGatingMode, SubscriptionTierLevel } from '@prisma/client';
 import { SubscriptionClient, subscriptionClient } from '../clients/SubscriptionClient';
 import {
   AudioBookDto,
@@ -1104,7 +1104,7 @@ export class AudioBookService {
     _audiobookId: string,
     audiobook: {
       subscriptionGatingMode: SubscriptionGatingMode;
-      minSubscriptionTier: number | null;
+      minSubscriptionTier: SubscriptionTierLevel | null;
     },
     userId: string | null,
     accessToken: string | null,

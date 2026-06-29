@@ -1,3 +1,4 @@
+import { SubscriptionTierLevel } from '@prisma/client';
 import { AudioBookController } from '../../controllers/AudioBookController';
 import { AudioBookService } from '../../services/AudioBookService';
 import { ResponseHandler } from '../../utils/ResponseHandler';
@@ -64,15 +65,15 @@ describe('AudioBookController subscription gating', () => {
          title: 'Gated Book',
          owner: { type: 'ORGANIZATION', id: orgId },
          subscriptionGatingMode: 'AUDIOBOOK',
-         minSubscriptionTier: 2,
+         minSubscriptionTier: SubscriptionTierLevel.STANDARD,
          isPublic: false,
       };
       mockAudioBookService.getAudioBookById.mockResolvedValue(mockBook as any);
       mockAudioBookService.getSubscriptionAccessForAudiobook = jest.fn().mockResolvedValue({
          canAccess: false,
          message: 'forbidden.subscription_tier_too_low',
-         requiredTier: 2,
-         userTier: 1,
+         requiredTier: SubscriptionTierLevel.STANDARD,
+         userTier: SubscriptionTierLevel.BASE,
       }) as any;
 
       await controller.getAudioBookById(mockReq, mockRes, mockReq.next);
@@ -82,7 +83,7 @@ describe('AudioBookController subscription gating', () => {
          audiobookId,
          {
             subscriptionGatingMode: 'AUDIOBOOK',
-            minSubscriptionTier: 2,
+            minSubscriptionTier: SubscriptionTierLevel.STANDARD,
          },
          authUserId,
          accessToken,
