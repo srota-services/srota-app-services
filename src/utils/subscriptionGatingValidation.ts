@@ -1,20 +1,21 @@
-import { Prisma, PrismaClient, SubscriptionGatingMode } from '@prisma/client';
+import { Prisma, PrismaClient, SubscriptionGatingMode, SubscriptionTierLevel } from '@prisma/client';
 import { ApiError } from '../types/ApiError';
 import { MessageHandler } from './MessageHandler';
+import { ALL_TIER_LEVELS, TIER_NUMERIC_ALIAS } from '../constants/subscriptionTierLevel';
 
 export type SubscriptionGatingModeInput = SubscriptionGatingMode | 'NONE' | 'AUDIOBOOK' | 'CHAPTER';
 
 export interface AudiobookGatingInput {
    subscriptionGatingMode?: SubscriptionGatingModeInput;
-   minSubscriptionTier?: number | null;
+   minSubscriptionTier?: SubscriptionTierLevel | null;
 }
 
 export interface ResolvedAudiobookGating {
    subscriptionGatingMode: SubscriptionGatingMode;
    /** Value stored on the audiobook row. */
-   minSubscriptionTier: number | null;
+   minSubscriptionTier: SubscriptionTierLevel | null;
    /** Tier applied to all chapters when mode is CHAPTER; null otherwise. */
-   chapterSyncTier: number | null;
+   chapterSyncTier: SubscriptionTierLevel | null;
 }
 
 export function parseSubscriptionGatingMode(
@@ -32,36 +33,51 @@ export function parseSubscriptionGatingMode(
    );
 }
 
+/**
+ * Validate a raw value is a valid SubscriptionTierLevel (or null).
+ * Accepts enum name strings ("BASE", "STANDARD", "PREMIUM") and null.
+ */
 export function validateMinSubscriptionTierValue(
-   value: number | string | null | undefined,
-): number | null {
+   value: SubscriptionTierLevel | string | null | undefined,
+): SubscriptionTierLevel | null {
    if (value === null || value === undefined) {
       return null;
    }
-   const parsed = Number(value);
-   if (!Number.isInteger(parsed) || parsed < 0) {
-      throw ApiError.validationError(
-         MessageHandler.getErrorMessage('validation.min_subscription_tier_invalid'),
-      );
+   if (ALL_TIER_LEVELS.includes(value as SubscriptionTierLevel)) {
+      return value as SubscriptionTierLevel;
    }
-   return parsed;
+   throw ApiError.validationError(
+      MessageHandler.getErrorMessage('validation.min_subscription_tier_invalid'),
+   );
 }
 
-/** Parse minSubscriptionTier from multipart/form-data (strings) or JSON bodies. */
+/**
+ * Parse minSubscriptionTier from multipart/form-data (strings) or JSON bodies.
+ * Accepts:
+ *   - undefined → undefined (field not provided)
+ *   - null | "" | "null" → null (remove gating)
+ *   - "BASE" | "STANDARD" | "PREMIUM" → corresponding enum value
+ *   - "1" | "2" | "3" → numeric aliases for backward-compatible API
+ */
 export function parseOptionalMinSubscriptionTierFromForm(
    value: unknown,
-): number | null | undefined {
+): SubscriptionTierLevel | null | undefined {
    if (value === undefined) {
       return undefined;
    }
    if (value === null || value === '' || value === 'null') {
       return null;
    }
-   return validateMinSubscriptionTierValue(value as number | string);
+   const str = String(value).trim();
+   // Numeric alias: "1" → BASE, "2" → STANDARD, "3" → PREMIUM
+   if (TIER_NUMERIC_ALIAS[str]) {
+      return TIER_NUMERIC_ALIAS[str]!;
+   }
+   return validateMinSubscriptionTierValue(str);
 }
 
 export function inferGatingModeFromLegacyTier(
-   minSubscriptionTier: number | null | undefined,
+   minSubscriptionTier: SubscriptionTierLevel | null | undefined,
 ): SubscriptionGatingMode {
    return minSubscriptionTier !== null && minSubscriptionTier !== undefined
       ? SubscriptionGatingMode.AUDIOBOOK
@@ -71,14 +87,14 @@ export function inferGatingModeFromLegacyTier(
 export async function getUniformChapterTier(
    prisma: PrismaClient | Prisma.TransactionClient,
    audiobookId: string,
-): Promise<number | null> {
+): Promise<SubscriptionTierLevel | null> {
    const chapters = await prisma.chapter.findMany({
       where: { audiobookId },
       select: { minSubscriptionTier: true },
    });
    const tiers = chapters
       .map((c) => c.minSubscriptionTier)
-      .filter((t): t is number => t !== null);
+      .filter((t): t is SubscriptionTierLevel => t !== null);
    if (tiers.length === 0) {
       return null;
    }
@@ -94,7 +110,7 @@ export async function getUniformChapterTier(
 export async function resolveAudiobookGatingUpdate(
    prisma: PrismaClient | Prisma.TransactionClient,
    audiobookId: string,
-   existing: { subscriptionGatingMode: SubscriptionGatingMode; minSubscriptionTier: number | null },
+   existing: { subscriptionGatingMode: SubscriptionGatingMode; minSubscriptionTier: SubscriptionTierLevel | null },
    input: AudiobookGatingInput,
 ): Promise<ResolvedAudiobookGating> {
    const parsedMode =
@@ -218,7 +234,7 @@ export function resolveAudiobookGatingCreate(input: AudiobookGatingInput): Resol
 
 export function assertChapterTierAllowed(
    audiobookMode: SubscriptionGatingMode,
-   chapterTier: number | null | undefined,
+   chapterTier: SubscriptionTierLevel | null | undefined,
 ): void {
    if (chapterTier === undefined || chapterTier === null) {
       return;
@@ -233,7 +249,7 @@ export function assertChapterTierAllowed(
 export async function assertChapterTierMatchesSiblings(
    prisma: PrismaClient | Prisma.TransactionClient,
    audiobookId: string,
-   chapterTier: number | null,
+   chapterTier: SubscriptionTierLevel | null,
    excludeChapterId?: string,
 ): Promise<void> {
    if (chapterTier === null) {
@@ -294,8 +310,8 @@ export async function syncChapterTiersForAudiobook(
 export async function resolveChapterTierForCreate(
    prisma: PrismaClient | Prisma.TransactionClient,
    audiobookId: string,
-   requestedTier: number | null | undefined,
-): Promise<number | null> {
+   requestedTier: SubscriptionTierLevel | null | undefined,
+): Promise<SubscriptionTierLevel | null> {
    const audiobook = await prisma.audioBook.findUnique({
       where: { id: audiobookId },
       select: { subscriptionGatingMode: true },
@@ -342,8 +358,8 @@ export async function resolveChapterTierForUpdate(
    prisma: PrismaClient | Prisma.TransactionClient,
    audiobookId: string,
    chapterId: string,
-   requestedTier: number | null | undefined,
-): Promise<number | null | undefined> {
+   requestedTier: SubscriptionTierLevel | null | undefined,
+): Promise<SubscriptionTierLevel | null | undefined> {
    if (requestedTier === undefined) {
       return undefined;
    }

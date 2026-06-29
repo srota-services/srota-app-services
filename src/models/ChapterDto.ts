@@ -3,7 +3,7 @@
  * Defines the structure for chapter-related data transfer
  */
 
-import { ChapterProgress, Bookmark, Note } from '@prisma/client';
+import { ChapterProgress, Bookmark, Note, SubscriptionTierLevel } from '@prisma/client';
 import { SubscriptionAccessDto } from './SubscriptionAccessDto';
 
 // Base Chapter interface
@@ -20,7 +20,7 @@ export interface ChapterData {
    imageAssets?: Record<string, string>;
    startPosition: number;
    endPosition: number;
-   minSubscriptionTier?: number | null;
+   minSubscriptionTier?: SubscriptionTierLevel | null;
    isActive: boolean;
    sourceUploadStatus?: 'pending' | 'ready' | 'failed';
    sourceUploadError?: string | null;
@@ -55,7 +55,7 @@ export interface CreateChapterRequest {
    startPosition: number;
    endPosition: number;
    isActive?: boolean;
-   minSubscriptionTier?: number | null;
+   minSubscriptionTier?: SubscriptionTierLevel | null;
    scheduledAt?: Date;
 }
 
@@ -71,7 +71,7 @@ export interface UpdateChapterRequest {
    startPosition?: number;
    endPosition?: number;
    isActive?: boolean;
-   minSubscriptionTier?: number | null;
+   minSubscriptionTier?: SubscriptionTierLevel | null;
    scheduledAt?: Date;
 }
 

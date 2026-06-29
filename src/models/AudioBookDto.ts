@@ -2,7 +2,7 @@
  * AudioBook DTO (Data Transfer Object) classes
  * Provides type-safe data structures for API communication
  */
-import { AudioBook as PrismaAudioBook, AudioBookOwnerType as PrismaAudioBookOwnerType, SubscriptionGatingMode } from '@prisma/client';
+import { AudioBook as PrismaAudioBook, AudioBookOwnerType as PrismaAudioBookOwnerType, SubscriptionGatingMode, SubscriptionTierLevel } from '@prisma/client';
 import { SubscriptionAccessDto } from './SubscriptionAccessDto';
 
 export type { SubscriptionAccessDto };
@@ -64,7 +64,7 @@ export interface AudioBookDto {
   isActive: boolean;
   isPublic: boolean;
   subscriptionGatingMode: SubscriptionGatingModeDto;
-  minSubscriptionTier?: number | null | undefined;
+  minSubscriptionTier?: SubscriptionTierLevel | null | undefined;
   createdAt: Date;
   updatedAt: Date;
   scheduledAt?: Date | undefined;
@@ -103,7 +103,7 @@ export interface CreateAudioBookDto {
   isActive?: boolean;
   isPublic?: boolean;
   subscriptionGatingMode?: SubscriptionGatingModeDto;
-  minSubscriptionTier?: number | null;
+  minSubscriptionTier?: SubscriptionTierLevel | null;
   scheduledAt?: Date;
   moodId?: string | null;
 }
@@ -125,7 +125,7 @@ export interface UpdateAudioBookDto {
   isActive?: boolean;
   isPublic?: boolean;
   subscriptionGatingMode?: SubscriptionGatingModeDto;
-  minSubscriptionTier?: number | null;
+  minSubscriptionTier?: SubscriptionTierLevel | null;
   scheduledAt?: Date;
   moodId?: string | null;
 }
@@ -199,7 +199,7 @@ export function toAudioBookDto(audiobook: PrismaAudioBook & {
       (audiobook as PrismaAudioBook & { subscriptionGatingMode?: SubscriptionGatingMode }).subscriptionGatingMode
         ?? SubscriptionGatingMode.NONE,
     ),
-    minSubscriptionTier: (audiobook as PrismaAudioBook & { minSubscriptionTier?: number | null }).minSubscriptionTier ?? null,
+    minSubscriptionTier: (audiobook as PrismaAudioBook & { minSubscriptionTier?: SubscriptionTierLevel | null }).minSubscriptionTier ?? null,
     createdAt: audiobook.createdAt,
     updatedAt: audiobook.updatedAt,
     scheduledAt: audiobook.scheduledAt || undefined,

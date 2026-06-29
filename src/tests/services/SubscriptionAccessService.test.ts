@@ -1,8 +1,14 @@
-import { SubscriptionGatingMode } from '@prisma/client';
+import { SubscriptionGatingMode, SubscriptionTierLevel } from '@prisma/client';
 import { SubscriptionAccessService } from '../../services/SubscriptionAccessService';
 import { AuthRole } from '../../constants/authRoles';
 
-function buildMockSubscriptionClient(tier: number | null) {
+jest.mock('../../utils/MessageHandler', () => ({
+   MessageHandler: {
+      getErrorMessage: (key: string) => key,
+   },
+}));
+
+function buildMockSubscriptionClient(tier: SubscriptionTierLevel | null) {
    return {
       getUserHighestActiveTier: jest.fn().mockResolvedValue(tier),
    } as any;
@@ -18,9 +24,9 @@ describe('SubscriptionAccessService', () => {
       expect(
          service.resolveAudiobookRequiredTier({
             subscriptionGatingMode: SubscriptionGatingMode.AUDIOBOOK,
-            minSubscriptionTier: 2,
+            minSubscriptionTier: SubscriptionTierLevel.STANDARD,
          }),
-      ).toBe(2);
+      ).toBe(SubscriptionTierLevel.STANDARD);
 
       expect(
          service.resolveAudiobookRequiredTier({
@@ -37,11 +43,11 @@ describe('SubscriptionAccessService', () => {
          service.resolveChapterRequiredTier(
             {
                subscriptionGatingMode: SubscriptionGatingMode.AUDIOBOOK,
-               minSubscriptionTier: 2,
+               minSubscriptionTier: SubscriptionTierLevel.STANDARD,
             },
             { minSubscriptionTier: null },
          ),
-      ).toBe(2);
+      ).toBe(SubscriptionTierLevel.STANDARD);
    });
 
    it('resolveChapterRequiredTier uses chapter tier in CHAPTER mode', () => {
@@ -53,54 +59,64 @@ describe('SubscriptionAccessService', () => {
                subscriptionGatingMode: SubscriptionGatingMode.CHAPTER,
                minSubscriptionTier: null,
             },
-            { minSubscriptionTier: 3 },
+            { minSubscriptionTier: SubscriptionTierLevel.PREMIUM },
          ),
-      ).toBe(3);
+      ).toBe(SubscriptionTierLevel.PREMIUM);
    });
 
    it('evaluateAccess grants access when tier qualifies', async () => {
-      const service = new SubscriptionAccessService(buildMockSubscriptionClient(2));
+      const service = new SubscriptionAccessService(buildMockSubscriptionClient(SubscriptionTierLevel.STANDARD));
       await expect(
-         service.evaluateAccess(2, userId, accessToken, AuthRole.LISTENER),
+         service.evaluateAccess(SubscriptionTierLevel.STANDARD, userId, accessToken, AuthRole.LISTENER),
       ).resolves.toMatchObject({
          canAccess: true,
-         userTier: 2,
+         userTier: SubscriptionTierLevel.STANDARD,
       });
    });
 
-   it('evaluateAccess grants access when required tier is 0 and user has no subscription', async () => {
+   it('evaluateAccess grants access for LISTENER when no tier required (NONE mode)', async () => {
       const client = buildMockSubscriptionClient(null);
       const service = new SubscriptionAccessService(client);
       await expect(
-         service.evaluateAccess(0, userId, accessToken, AuthRole.LISTENER),
+         service.evaluateAccess(null, userId, accessToken, AuthRole.LISTENER),
       ).resolves.toMatchObject({
          canAccess: true,
-         requiredTier: 0,
       });
       expect(client.getUserHighestActiveTier).not.toHaveBeenCalled();
    });
 
-   it('evaluateAccess denies access when required tier is 0 and user is not logged in', async () => {
+   it('evaluateAccess denies access when user is not logged in (login gate)', async () => {
       const client = buildMockSubscriptionClient(null);
       const service = new SubscriptionAccessService(client);
       await expect(
-         service.evaluateAccess(0, null, null, AuthRole.LISTENER),
+         service.evaluateAccess(SubscriptionTierLevel.BASE, null, null, AuthRole.LISTENER),
       ).resolves.toMatchObject({
          canAccess: false,
-         requiredTier: 0,
-         userTier: null,
+         message: 'forbidden.login_required',
+      });
+      expect(client.getUserHighestActiveTier).not.toHaveBeenCalled();
+   });
+
+   it('evaluateAccess denies GUEST users regardless of tier (login gate)', async () => {
+      const client = buildMockSubscriptionClient(null);
+      const service = new SubscriptionAccessService(client);
+      await expect(
+         service.evaluateAccess(null, userId, accessToken, AuthRole.GUEST),
+      ).resolves.toMatchObject({
+         canAccess: false,
+         message: 'forbidden.login_required',
       });
       expect(client.getUserHighestActiveTier).not.toHaveBeenCalled();
    });
 
    it('evaluateAccess bypasses subscription lookup for non-listener roles', async () => {
-      const client = buildMockSubscriptionClient(2);
+      const client = buildMockSubscriptionClient(SubscriptionTierLevel.STANDARD);
       const service = new SubscriptionAccessService(client);
       await expect(
-         service.evaluateAccess(2, userId, accessToken, AuthRole.AUTHOR),
+         service.evaluateAccess(SubscriptionTierLevel.STANDARD, userId, accessToken, AuthRole.AUTHOR),
       ).resolves.toMatchObject({
          canAccess: true,
-         requiredTier: 2,
+         requiredTier: SubscriptionTierLevel.STANDARD,
       });
       expect(client.getUserHighestActiveTier).not.toHaveBeenCalled();
    });

@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import { SubscriptionGatingMode } from '@prisma/client';
+import { SubscriptionGatingMode, SubscriptionTierLevel } from '@prisma/client';
 import { requireChapterStreamAccess } from '../../middleware/StreamAccessMiddleware';
 import { AuthRole } from '../../constants/authRoles';
 import { AuthenticatedRequest } from '../../types/auth';
@@ -76,7 +76,7 @@ describe('requireChapterStreamAccess', () => {
                isActive: true,
                audiobook: {
                   subscriptionGatingMode: SubscriptionGatingMode.AUDIOBOOK,
-                  minSubscriptionTier: 2,
+                  minSubscriptionTier: SubscriptionTierLevel.STANDARD,
                   isPublic: true,
                   isActive: true,
                },
@@ -109,7 +109,7 @@ describe('requireChapterStreamAccess', () => {
                isActive: true,
                audiobook: {
                   subscriptionGatingMode: SubscriptionGatingMode.AUDIOBOOK,
-                  minSubscriptionTier: 2,
+                  minSubscriptionTier: SubscriptionTierLevel.STANDARD,
                   isPublic: true,
                   isActive: true,
                },

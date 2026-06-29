@@ -221,7 +221,7 @@ errors:
     user_audiobook_type_invalid: "User-audiobook type must be one of: OWNED, PURCHASED"
     user_audiobook_type_not_settable: "User-audiobook type is assigned by the server and cannot be set in the request body"
     no_update_fields: "At least one field must be provided for update"
-    min_subscription_tier_invalid: "minSubscriptionTier must be a non-negative integer or null"
+    min_subscription_tier_invalid: "minSubscriptionTier must be BASE, STANDARD, or PREMIUM, or null"
     subscription_gating_mode_invalid: "subscriptionGatingMode must be one of: NONE, AUDIOBOOK, CHAPTER"
     subscription_gating_tier_required: "minSubscriptionTier is required for AUDIOBOOK and CHAPTER gating modes"
     chapter_tier_not_allowed: "Chapter minSubscriptionTier is only allowed when the audiobook uses CHAPTER gating mode"
@@ -301,6 +301,7 @@ errors:
     subscription_tier_too_low: "Your current subscription plan does not include access to this audiobook"
     registered_user_required: "Please sign up or log in to access this feature"
     guest_streaming_not_allowed: "Please sign up or log in to play audiobooks"
+    login_required: "Please log in to access this content"
 
   auth:
     create_user_failed: "Failed to create user account"

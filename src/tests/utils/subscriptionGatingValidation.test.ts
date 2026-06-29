@@ -1,4 +1,4 @@
-import { SubscriptionGatingMode } from '@prisma/client';
+import { SubscriptionGatingMode, SubscriptionTierLevel } from '@prisma/client';
 import {
    resolveAudiobookGatingCreate,
    resolveAudiobookGatingUpdate,
@@ -7,6 +7,12 @@ import {
    parseOptionalMinSubscriptionTierFromForm,
 } from '../../utils/subscriptionGatingValidation';
 import { ApiError } from '../../types/ApiError';
+
+jest.mock('../../utils/MessageHandler', () => ({
+   MessageHandler: {
+      getErrorMessage: (key: string) => key,
+   },
+}));
 
 describe('subscriptionGatingValidation', () => {
    describe('resolveAudiobookGatingCreate', () => {
@@ -22,11 +28,11 @@ describe('subscriptionGatingValidation', () => {
          expect(
             resolveAudiobookGatingCreate({
                subscriptionGatingMode: 'AUDIOBOOK',
-               minSubscriptionTier: 2,
+               minSubscriptionTier: SubscriptionTierLevel.STANDARD,
             }),
          ).toEqual({
             subscriptionGatingMode: SubscriptionGatingMode.AUDIOBOOK,
-            minSubscriptionTier: 2,
+            minSubscriptionTier: SubscriptionTierLevel.STANDARD,
             chapterSyncTier: null,
          });
       });
@@ -35,12 +41,12 @@ describe('subscriptionGatingValidation', () => {
          expect(
             resolveAudiobookGatingCreate({
                subscriptionGatingMode: 'CHAPTER',
-               minSubscriptionTier: 2,
+               minSubscriptionTier: SubscriptionTierLevel.STANDARD,
             }),
          ).toEqual({
             subscriptionGatingMode: SubscriptionGatingMode.CHAPTER,
             minSubscriptionTier: null,
-            chapterSyncTier: 2,
+            chapterSyncTier: SubscriptionTierLevel.STANDARD,
          });
       });
 
@@ -57,13 +63,13 @@ describe('subscriptionGatingValidation', () => {
    describe('assertChapterTierAllowed', () => {
       it('rejects chapter tier when audiobook uses AUDIOBOOK mode', () => {
          expect(() =>
-            assertChapterTierAllowed(SubscriptionGatingMode.AUDIOBOOK, 2),
+            assertChapterTierAllowed(SubscriptionGatingMode.AUDIOBOOK, SubscriptionTierLevel.STANDARD),
          ).toThrow(ApiError);
       });
 
       it('allows chapter tier when audiobook uses CHAPTER mode', () => {
          expect(() =>
-            assertChapterTierAllowed(SubscriptionGatingMode.CHAPTER, 2),
+            assertChapterTierAllowed(SubscriptionGatingMode.CHAPTER, SubscriptionTierLevel.STANDARD),
          ).not.toThrow();
       });
    });
@@ -81,7 +87,7 @@ describe('subscriptionGatingValidation', () => {
             'ab-1',
             {
                subscriptionGatingMode: SubscriptionGatingMode.AUDIOBOOK,
-               minSubscriptionTier: 2,
+               minSubscriptionTier: SubscriptionTierLevel.STANDARD,
             },
             { subscriptionGatingMode: 'CHAPTER' },
          );
@@ -89,20 +95,31 @@ describe('subscriptionGatingValidation', () => {
          expect(result).toEqual({
             subscriptionGatingMode: SubscriptionGatingMode.CHAPTER,
             minSubscriptionTier: null,
-            chapterSyncTier: 2,
+            chapterSyncTier: SubscriptionTierLevel.STANDARD,
          });
       });
    });
 
    describe('validateMinSubscriptionTierValue', () => {
-      it('rejects negative tiers', () => {
-         expect(() => validateMinSubscriptionTierValue(-1)).toThrow(ApiError);
+      it('accepts valid tier values', () => {
+         expect(validateMinSubscriptionTierValue(SubscriptionTierLevel.BASE)).toBe(SubscriptionTierLevel.BASE);
+         expect(validateMinSubscriptionTierValue(SubscriptionTierLevel.STANDARD)).toBe(SubscriptionTierLevel.STANDARD);
+         expect(validateMinSubscriptionTierValue(SubscriptionTierLevel.PREMIUM)).toBe(SubscriptionTierLevel.PREMIUM);
+         expect(validateMinSubscriptionTierValue(null)).toBeNull();
+      });
+
+      it('rejects invalid string values', () => {
+         expect(() => validateMinSubscriptionTierValue('INVALID' as any)).toThrow(ApiError);
       });
    });
 
    describe('parseOptionalMinSubscriptionTierFromForm', () => {
-      it('parses string tier from multipart form data', () => {
-         expect(parseOptionalMinSubscriptionTierFromForm('2')).toBe(2);
+      it('parses numeric alias "2" to STANDARD', () => {
+         expect(parseOptionalMinSubscriptionTierFromForm('2')).toBe(SubscriptionTierLevel.STANDARD);
+      });
+
+      it('parses enum name "STANDARD" to STANDARD', () => {
+         expect(parseOptionalMinSubscriptionTierFromForm('STANDARD')).toBe(SubscriptionTierLevel.STANDARD);
       });
 
       it('returns undefined when field is omitted', () => {
@@ -112,6 +129,10 @@ describe('subscriptionGatingValidation', () => {
       it('returns null for explicit empty or null form values', () => {
          expect(parseOptionalMinSubscriptionTierFromForm('')).toBeNull();
          expect(parseOptionalMinSubscriptionTierFromForm('null')).toBeNull();
+      });
+
+      it('rejects invalid values', () => {
+         expect(() => parseOptionalMinSubscriptionTierFromForm('INVALID')).toThrow(ApiError);
       });
    });
 });

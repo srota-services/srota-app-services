@@ -2,7 +2,7 @@
  * Chapter Service
  * Handles business logic for chapter management
  */
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, SubscriptionGatingMode, SubscriptionTierLevel } from '@prisma/client';
 import {
    ChapterData,
    ChapterWithRelations,
@@ -29,7 +29,6 @@ import {
    resolveChapterTierForUpdate,
 } from '../utils/subscriptionGatingValidation';
 import { SubscriptionAccessService, subscriptionAccessService } from './SubscriptionAccessService';
-import { SubscriptionGatingMode } from '@prisma/client';
 import { SubscriptionAccessDto } from '../models/SubscriptionAccessDto';
 import { runWrite } from '../utils/prismaTransaction';
 import { rethrowServiceError, logServiceError } from '../utils/serviceError';
@@ -53,8 +52,8 @@ export class ChapterService {
    }
 
    async getSubscriptionAccessForChapter(
-      chapter: { minSubscriptionTier: number | null },
-      audiobook: { subscriptionGatingMode: SubscriptionGatingMode; minSubscriptionTier: number | null },
+      chapter: { minSubscriptionTier: SubscriptionTierLevel | null },
+      audiobook: { subscriptionGatingMode: SubscriptionGatingMode; minSubscriptionTier: SubscriptionTierLevel | null },
       userId: string | null,
       accessToken: string | null,
       userRole?: string | null,
@@ -834,7 +833,7 @@ export class ChapterService {
       coverImage: string;
       startPosition: number;
       endPosition: number;
-      minSubscriptionTier?: number | null;
+      minSubscriptionTier?: SubscriptionTierLevel | null;
       isActive: boolean;
       sourceUploadStatus?: 'pending' | 'ready' | 'failed';
       sourceUploadError?: string | null;

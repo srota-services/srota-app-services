@@ -81,8 +81,8 @@ const options: swaggerJsdoc.Options = {
                properties: {
                   canAccess: { type: 'boolean' },
                   message: { type: 'string' },
-                  requiredTier: { type: 'integer' },
-                  userTier: { type: 'integer', nullable: true },
+                  requiredTier: { type: 'string', enum: ['BASE', 'STANDARD', 'PREMIUM'] },
+                  userTier: { type: 'string', enum: ['BASE', 'STANDARD', 'PREMIUM'], nullable: true },
                },
             },
             AudioBookOwnerInput: {
@@ -234,7 +234,8 @@ const options: swaggerJsdoc.Options = {
                      $ref: '#/components/schemas/SubscriptionGatingMode',
                   },
                   minSubscriptionTier: {
-                     type: 'integer',
+                     type: 'string',
+                     enum: ['BASE', 'STANDARD', 'PREMIUM'],
                      nullable: true,
                      description:
                         'Required tier when subscriptionGatingMode is AUDIOBOOK. Must be null when mode is CHAPTER or NONE.',
@@ -317,7 +318,8 @@ const options: swaggerJsdoc.Options = {
                      description: 'Optional tag IDs (JSON array or comma-separated in form-data)',
                   },
                   minSubscriptionTier: {
-                     type: 'integer',
+                     type: 'string',
+                     enum: ['BASE', 'STANDARD', 'PREMIUM'],
                      nullable: true,
                      description:
                         'Minimum subscription tier. With subscriptionGatingMode AUDIOBOOK, gates the whole book. With CHAPTER, applied uniformly to all chapters (audiobook field stored as null).',
@@ -364,7 +366,7 @@ const options: swaggerJsdoc.Options = {
                   isbn: { type: 'string', description: 'Optional ISBN' },
                   isActive: { type: 'boolean', description: 'Optional active flag (defaults to true)' },
                   isPublic: { type: 'boolean', description: 'Optional public flag (defaults to true)' },
-                  minSubscriptionTier: { type: 'integer', description: 'Optional minimum subscription tier' },
+                  minSubscriptionTier: { type: 'string', enum: ['BASE', 'STANDARD', 'PREMIUM'], nullable: true, description: 'Optional minimum subscription tier' },
                   scheduledAt: { type: 'string', format: 'date-time', description: 'Optional scheduled publish time' },
                },
             },
@@ -460,7 +462,8 @@ const options: swaggerJsdoc.Options = {
                      description: 'Optional tag IDs to replace current tags',
                   },
                   minSubscriptionTier: {
-                     type: 'integer',
+                     type: 'string',
+                     enum: ['BASE', 'STANDARD', 'PREMIUM'],
                      nullable: true,
                      description: 'Optional minimum subscription tier required to access',
                   },
@@ -562,7 +565,8 @@ const options: swaggerJsdoc.Options = {
                   },
                   scheduledAt: { type: 'string', format: 'date-time', nullable: true },
                   minSubscriptionTier: {
-                     type: 'integer',
+                     type: 'string',
+                     enum: ['BASE', 'STANDARD', 'PREMIUM'],
                      nullable: true,
                      description:
                         'Minimum tier when parent audiobook uses CHAPTER gating. All chapters in an audiobook must share the same value.',
