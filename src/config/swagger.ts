@@ -73,7 +73,7 @@ const options: swaggerJsdoc.Options = {
                type: 'string',
                enum: ['NONE', 'AUDIOBOOK', 'CHAPTER'],
                description:
-                  'NONE = no gating. AUDIOBOOK = whole-book tier on minSubscriptionTier. CHAPTER = per-chapter tier (uniform across all chapters); audiobook detail stays open.',
+                  'NONE = no gating. AUDIOBOOK = whole-book tier on audiobook.minSubscriptionTier (chapters inherit on create). CHAPTER = per-chapter tiers in non-decreasing order by chapterNumber; audiobook detail stays open.',
             },
             SubscriptionAccess: {
                type: 'object',
@@ -322,7 +322,7 @@ const options: swaggerJsdoc.Options = {
                      enum: ['BASE', 'STANDARD', 'PREMIUM'],
                      nullable: true,
                      description:
-                        'Minimum subscription tier. With subscriptionGatingMode AUDIOBOOK, gates the whole book. With CHAPTER, applied uniformly to all chapters (audiobook field stored as null).',
+                        'Minimum subscription tier. Required for AUDIOBOOK mode. Omit or null for CHAPTER mode (tiers are set per chapter at chapter creation).',
                      example: 2,
                   },
                   subscriptionGatingMode: {
@@ -569,7 +569,7 @@ const options: swaggerJsdoc.Options = {
                      enum: ['BASE', 'STANDARD', 'PREMIUM'],
                      nullable: true,
                      description:
-                        'Minimum tier when parent audiobook uses CHAPTER gating. All chapters in an audiobook must share the same value.',
+                        'Minimum tier when parent audiobook uses CHAPTER gating. Required on create. Tiers must be non-decreasing by chapterNumber, with at most two tier step-ups across the audiobook. Tiers cannot be reduced on update. Under AUDIOBOOK gating, inherited from the parent audiobook.',
                   },
                   subscriptionAccess: {
                      $ref: '#/components/schemas/SubscriptionAccess',

@@ -14,6 +14,8 @@ export interface ChapterGatingContext {
    minSubscriptionTier: SubscriptionTierLevel | null;
 }
 
+export type SubscriptionGatedContentType = 'audiobook' | 'chapter';
+
 export class SubscriptionAccessService {
    private subscriptionClient: SubscriptionClient;
 
@@ -50,6 +52,7 @@ export class SubscriptionAccessService {
       userId: string | null,
       accessToken: string | null,
       userRole?: string | null,
+      contentType: SubscriptionGatedContentType = 'audiobook',
    ): Promise<SubscriptionAccessDto> {
       const tier = requiredTier ?? null;
 
@@ -85,9 +88,13 @@ export class SubscriptionAccessService {
       }
 
       if (SUBSCRIPTION_TIER_ORDER[userTier]! < SUBSCRIPTION_TIER_ORDER[tier]!) {
+         const tierTooLowKey =
+            contentType === 'chapter'
+               ? 'forbidden.subscription_tier_too_low_chapter'
+               : 'forbidden.subscription_tier_too_low';
          return {
             canAccess: false,
-            message: MessageHandler.getErrorMessage('forbidden.subscription_tier_too_low'),
+            message: MessageHandler.getErrorMessage(tierTooLowKey),
             requiredTier: tier,
             userTier,
          };

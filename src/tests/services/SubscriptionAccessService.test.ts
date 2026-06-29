@@ -74,6 +74,38 @@ describe('SubscriptionAccessService', () => {
       });
    });
 
+   it('evaluateAccess uses chapter message when tier is too low for chapter content', async () => {
+      const service = new SubscriptionAccessService(buildMockSubscriptionClient(SubscriptionTierLevel.BASE));
+      await expect(
+         service.evaluateAccess(
+            SubscriptionTierLevel.STANDARD,
+            userId,
+            accessToken,
+            AuthRole.LISTENER,
+            'chapter',
+         ),
+      ).resolves.toMatchObject({
+         canAccess: false,
+         message: 'forbidden.subscription_tier_too_low_chapter',
+      });
+   });
+
+   it('evaluateAccess uses audiobook message when tier is too low for audiobook content', async () => {
+      const service = new SubscriptionAccessService(buildMockSubscriptionClient(SubscriptionTierLevel.BASE));
+      await expect(
+         service.evaluateAccess(
+            SubscriptionTierLevel.STANDARD,
+            userId,
+            accessToken,
+            AuthRole.LISTENER,
+            'audiobook',
+         ),
+      ).resolves.toMatchObject({
+         canAccess: false,
+         message: 'forbidden.subscription_tier_too_low',
+      });
+   });
+
    it('evaluateAccess grants access for LISTENER when no tier required (NONE mode)', async () => {
       const client = buildMockSubscriptionClient(null);
       const service = new SubscriptionAccessService(client);

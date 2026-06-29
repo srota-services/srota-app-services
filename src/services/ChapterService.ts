@@ -64,6 +64,7 @@ export class ChapterService {
          userId,
          accessToken,
          userRole,
+         'chapter',
       );
    }
 
@@ -174,6 +175,7 @@ export class ChapterService {
          const chapterTier = await resolveChapterTierForCreate(
             this.prisma,
             chapterData.audiobookId,
+            chapterData.chapterNumber,
             chapterData.minSubscriptionTier,
          );
 
@@ -397,14 +399,32 @@ export class ChapterService {
             updatePayload.isActive = false;
          }
 
-         const resolvedTier = await resolveChapterTierForUpdate(
+         const tierUpdateInput: {
+            chapterNumber?: number;
+            minSubscriptionTier?: SubscriptionTierLevel | null;
+         } = {};
+         if (updateData.chapterNumber !== undefined) {
+            tierUpdateInput.chapterNumber = updateData.chapterNumber;
+         }
+         if (updateData.minSubscriptionTier !== undefined) {
+            tierUpdateInput.minSubscriptionTier = updateData.minSubscriptionTier;
+         }
+
+         const resolvedGating = await resolveChapterTierForUpdate(
             this.prisma,
             existingChapter.audiobookId,
             chapterId,
-            updateData.minSubscriptionTier,
+            {
+               chapterNumber: existingChapter.chapterNumber,
+               minSubscriptionTier: existingChapter.minSubscriptionTier,
+            },
+            tierUpdateInput,
          );
-         if (resolvedTier !== undefined) {
-            updatePayload.minSubscriptionTier = resolvedTier;
+         if (resolvedGating.minSubscriptionTier !== undefined) {
+            updatePayload.minSubscriptionTier = resolvedGating.minSubscriptionTier;
+         }
+         if (resolvedGating.chapterNumber !== undefined) {
+            updatePayload.chapterNumber = resolvedGating.chapterNumber;
          }
 
          let chapter = await runWrite(this.prisma, async (tx) =>
@@ -488,8 +508,8 @@ export class ChapterService {
 
          emitCacheInvalidation('chapter', 'updated', chapterId, { audiobookId: existingChapter.audiobookId });
          if (
-            resolvedTier !== undefined &&
-            resolvedTier !== existingChapter.minSubscriptionTier
+            resolvedGating.minSubscriptionTier !== undefined &&
+            resolvedGating.minSubscriptionTier !== existingChapter.minSubscriptionTier
          ) {
             emitChapterSubscriptionTierInvalidation({
                action: 'updated',

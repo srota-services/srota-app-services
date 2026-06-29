@@ -2,6 +2,7 @@
  * ChapterService DB-first source audio upload order tests
  */
 
+import { SubscriptionGatingMode } from '@prisma/client';
 import { ChapterService } from '../../services/ChapterService';
 import { FileUploadService } from '../../services/FileUploadService';
 import { RabbitMQFactory } from '../../config/rabbitmq';
@@ -9,6 +10,12 @@ import { attachPrismaTransaction } from '../helpers/prismaMock';
 
 jest.mock('../../services/FileUploadService');
 jest.mock('../../config/rabbitmq');
+jest.mock('../../services/DomainEventPublisher', () => ({
+   emitCacheInvalidation: jest.fn(),
+}));
+jest.mock('../../services/chapterSubscriptionTierInvalidation', () => ({
+   emitChapterSubscriptionTierInvalidation: jest.fn(),
+}));
 jest.mock('../../services/FileUrlService', () => ({
    fileUrlService: {
       resolveChapterMedia: jest.fn(async (chapter: Record<string, unknown>) => ({
@@ -29,6 +36,13 @@ jest.mock('../../services/ImageAssetService', () => ({
       }),
    })),
 }));
+
+/** Audiobook mock for upload-order tests (gating is not under test). */
+const mockAudiobookNoneGating = {
+   id: 'book-1',
+   subscriptionGatingMode: SubscriptionGatingMode.NONE,
+   minSubscriptionTier: null,
+};
 
 describe('ChapterService.createChapter upload order', () => {
    const mockCreate = jest.fn();
@@ -85,7 +99,7 @@ describe('ChapterService.createChapter upload order', () => {
 
    it('creates chapter record before uploading audio file', async () => {
       const prisma = attachPrismaTransaction({
-         audioBook: { findUnique: jest.fn().mockResolvedValue({ id: 'book-1' }) },
+         audioBook: { findUnique: jest.fn().mockResolvedValue(mockAudiobookNoneGating) },
          chapter: {
             findFirst: jest.fn().mockResolvedValue(null),
             create: mockCreate,
@@ -193,7 +207,7 @@ describe('ChapterService.createChapter upload order', () => {
       });
 
       const prisma = attachPrismaTransaction({
-         audioBook: { findUnique: jest.fn().mockResolvedValue({ id: 'book-1' }) },
+         audioBook: { findUnique: jest.fn().mockResolvedValue(mockAudiobookNoneGating) },
          chapter: {
             findFirst: jest.fn().mockResolvedValue(null),
             create: mockCreate,
@@ -260,6 +274,7 @@ describe('ChapterService.updateChapter re-transcode', () => {
          startPosition: 0,
          endPosition: 100,
          isActive: true,
+         minSubscriptionTier: null,
          sourceUploadStatus: 'ready',
          sourceUploadError: null,
          scheduledAt: null,
@@ -268,6 +283,11 @@ describe('ChapterService.updateChapter re-transcode', () => {
       };
 
       const prisma = attachPrismaTransaction({
+         audioBook: {
+            findUnique: jest.fn().mockResolvedValue({
+               subscriptionGatingMode: SubscriptionGatingMode.NONE,
+            }),
+         },
          chapter: {
             findUnique: jest.fn().mockResolvedValue(existingChapter),
             findFirst: jest.fn().mockResolvedValue(null),
