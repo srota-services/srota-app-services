@@ -39,6 +39,13 @@ export function createChapterRoutes(prisma: PrismaClient): Router {
       chapterController.getChapterById
    );
 
+   // Stream subscription gating context (used by streaming-service)
+   router.get(
+      '/chapters/:id/stream-gating',
+      ValidationMiddleware.validateId,
+      chapterController.getChapterStreamGating
+   );
+
    // Create new chapter
    router.post(
       '/chapters',

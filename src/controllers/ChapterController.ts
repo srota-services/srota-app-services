@@ -218,6 +218,65 @@ export class ChapterController {
 
    /**
     * @swagger
+    * /api/v1/chapters/{id}/stream-gating:
+    *   get:
+    *     summary: Get chapter stream subscription gating context
+    *     description: |
+    *       Returns the minimum subscription tier required to stream this chapter.
+    *       Used by streaming-service for LISTENER subscription gating. `requiredTier: null` means free access.
+    *     tags: [Chapters]
+    *     security:
+    *       - bearerAuth: []
+    *     parameters:
+    *       - name: id
+    *         in: path
+    *         required: true
+    *         schema:
+    *           type: string
+    *         description: Chapter ID
+    *     responses:
+    *       200:
+    *         description: Stream gating context retrieved successfully
+    *         content:
+    *           application/json:
+    *             schema:
+    *               allOf:
+    *                 - $ref: '#/components/schemas/ApiResponse'
+    *                 - type: object
+    *                   properties:
+    *                     data:
+    *                       type: object
+    *                       required:
+    *                         - chapterId
+    *                         - requiredTier
+    *                       properties:
+    *                         chapterId:
+    *                           type: string
+    *                         requiredTier:
+    *                           $ref: '#/components/schemas/SubscriptionTierLevel'
+    *                           nullable: true
+    *                           description: Minimum tier required to stream; null when chapter is free
+    *       401:
+    *         $ref: '#/components/responses/Unauthorized'
+    *       404:
+    *         $ref: '#/components/responses/NotFound'
+    *       500:
+    *         $ref: '#/components/responses/InternalServerError'
+    */
+   getChapterStreamGating = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
+      const { id } = req.params;
+
+      const requiredTier = await this.chapterService.getChapterRequiredTierForStream(id as string);
+
+      ResponseHandler.success(
+         res,
+         { chapterId: id, requiredTier },
+         MessageHandler.getSuccessMessage('chapters.stream_gating_retrieved'),
+      );
+   });
+
+   /**
+    * @swagger
     * /api/v1/chapters:
     *   post:
     *     summary: Create a new chapter

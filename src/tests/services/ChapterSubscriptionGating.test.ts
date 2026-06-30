@@ -52,6 +52,77 @@ describe('ChapterService subscription gating', () => {
       expect(access).toMatchObject({ canAccess: true, requiredTier: SubscriptionTierLevel.BASE });
    });
 
+   describe('getChapterRequiredTierForStream', () => {
+      it('returns null for NONE gating mode', async () => {
+         const mockPrisma = {
+            chapter: {
+               findUnique: jest.fn().mockResolvedValue({
+                  minSubscriptionTier: SubscriptionTierLevel.PREMIUM,
+                  audiobook: {
+                     subscriptionGatingMode: SubscriptionGatingMode.NONE,
+                     minSubscriptionTier: null,
+                  },
+               }),
+            },
+         } as any;
+
+         const service = new ChapterService(mockPrisma);
+         const tier = await service.getChapterRequiredTierForStream('chapter-1');
+
+         expect(tier).toBeNull();
+      });
+
+      it('returns audiobook tier in AUDIOBOOK mode', async () => {
+         const mockPrisma = {
+            chapter: {
+               findUnique: jest.fn().mockResolvedValue({
+                  minSubscriptionTier: null,
+                  audiobook: {
+                     subscriptionGatingMode: SubscriptionGatingMode.AUDIOBOOK,
+                     minSubscriptionTier: SubscriptionTierLevel.STANDARD,
+                  },
+               }),
+            },
+         } as any;
+
+         const service = new ChapterService(mockPrisma);
+         const tier = await service.getChapterRequiredTierForStream('chapter-1');
+
+         expect(tier).toBe(SubscriptionTierLevel.STANDARD);
+      });
+
+      it('returns chapter tier in CHAPTER mode', async () => {
+         const mockPrisma = {
+            chapter: {
+               findUnique: jest.fn().mockResolvedValue({
+                  minSubscriptionTier: SubscriptionTierLevel.PREMIUM,
+                  audiobook: {
+                     subscriptionGatingMode: SubscriptionGatingMode.CHAPTER,
+                     minSubscriptionTier: null,
+                  },
+               }),
+            },
+         } as any;
+
+         const service = new ChapterService(mockPrisma);
+         const tier = await service.getChapterRequiredTierForStream('chapter-1');
+
+         expect(tier).toBe(SubscriptionTierLevel.PREMIUM);
+      });
+
+      it('throws 404 when chapter not found', async () => {
+         const mockPrisma = {
+            chapter: {
+               findUnique: jest.fn().mockResolvedValue(null),
+            },
+         } as any;
+
+         const service = new ChapterService(mockPrisma);
+
+         await expect(service.getChapterRequiredTierForStream('missing')).rejects.toBeInstanceOf(ApiError);
+      });
+   });
+
    it('createChapter rejects tier when resolveChapterTierForCreate throws', async () => {
       (resolveChapterTierForCreate as jest.Mock).mockRejectedValue(
          ApiError.validationError('validation.chapter_tier_not_allowed'),

@@ -69,6 +69,34 @@ export class ChapterService {
    }
 
    /**
+    * Resolve the minimum subscription tier required to stream a chapter.
+    * Used by streaming-service for LISTENER subscription gating.
+    */
+   async getChapterRequiredTierForStream(chapterId: string): Promise<SubscriptionTierLevel | null> {
+      const chapter = await this.prisma.chapter.findUnique({
+         where: { id: chapterId },
+         select: {
+            minSubscriptionTier: true,
+            audiobook: {
+               select: {
+                  subscriptionGatingMode: true,
+                  minSubscriptionTier: true,
+               },
+            },
+         },
+      });
+
+      if (!chapter) {
+         throw ApiError.notFound('Chapter');
+      }
+
+      return this.subscriptionAccessService.resolveChapterRequiredTier(
+         chapter.audiobook,
+         { minSubscriptionTier: chapter.minSubscriptionTier },
+      );
+   }
+
+   /**
     * Get all chapters for a specific audiobook
     */
    async getChaptersByAudiobookId(audiobookId: string, queryParams?: ChapterQueryParams): Promise<{
