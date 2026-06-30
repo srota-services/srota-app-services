@@ -18,6 +18,7 @@ success:
   chapters:
     retrieved: "Chapters retrieved successfully"
     retrieved_by_id: "Chapter retrieved successfully"
+    stream_gating_retrieved: "Chapter stream gating context retrieved successfully"
     created: "Chapter created successfully"
     updated: "Chapter updated successfully"
     progress_retrieved: "Chapter progress retrieved successfully"
