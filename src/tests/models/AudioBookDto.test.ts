@@ -23,7 +23,14 @@ describe('AudioBookDto', () => {
          coverImage: 'https://example.com/cover.jpg',
          ownerType: 'ORGANIZATION' as const,
          ownerId: 'org-1',
-         language: 'en',
+         languageId: 'lang-en',
+         language: {
+            id: 'lang-en',
+            name: 'English',
+            code: 'en',
+            createdAt: new Date('2024-01-01'),
+            updatedAt: new Date('2024-01-02'),
+         },
          publisher: 'Test Publisher',
          publishDate: new Date('2024-01-01'),
          isbn: '1234567890123',
@@ -138,7 +145,7 @@ describe('AudioBookDto', () => {
             owner: { type: 'AUTHOR', id: 'author-id' },
             narrator: 'Narrator Name',
             genreIds: ['genre-id'],
-            language: 'en',
+            languageId: 'lang-en',
          };
 
          expect(createDto.owner.type).toBe('AUTHOR');

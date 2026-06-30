@@ -37,7 +37,7 @@ export function createAudioBookRoutes(prisma: PrismaClient): Router {
     *       - $ref: '#/components/parameters/MoodIdsParam'
     *       - $ref: '#/components/parameters/ActiveParam'
     *       - $ref: '#/components/parameters/ScheduledParam'
-    *       - $ref: '#/components/parameters/LanguageParam'
+    *       - $ref: '#/components/parameters/LanguageIdParam'
     *       - $ref: '#/components/parameters/AuthorParam'
     *       - $ref: '#/components/parameters/NarratorParam'
     *       - $ref: '#/components/parameters/IsActiveParam'
@@ -217,7 +217,7 @@ export function createAudioBookRoutes(prisma: PrismaClient): Router {
     *       - $ref: '#/components/parameters/SortByParam'
     *       - $ref: '#/components/parameters/SortOrderParam'
     *       - $ref: '#/components/parameters/GenreParam'
-    *       - $ref: '#/components/parameters/LanguageParam'
+    *       - $ref: '#/components/parameters/LanguageIdParam'
     *       - $ref: '#/components/parameters/AuthorParam'
     *       - $ref: '#/components/parameters/NarratorParam'
     *       - $ref: '#/components/parameters/IsActiveParam'
@@ -303,7 +303,7 @@ export function createAudioBookRoutes(prisma: PrismaClient): Router {
     *                 author: "Jane Doe"
     *                 owner: '{"type":"ORGANIZATION","id":"corg1234567890abcdefghij"}'
     *                 genreIds: '["cgenre1234567890abcdefgh"]'
-    *                 language: "bn"
+    *                 languageId: "cl000000000000000000000002"
     *                 isPublic: true
     *             authorOwner:
     *               summary: Create with author owner

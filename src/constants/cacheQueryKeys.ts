@@ -100,6 +100,8 @@ function keysForResource(
          return [['tags'], ['tags', id], ['audiobooks']];
       case 'genre':
          return [['genres'], ['genres', id], ['audiobooks']];
+      case 'language':
+         return [['languages'], ['languages', id], ['audiobooks']];
       case 'mood':
          return [['moods'], ['moods', id], ['audiobooks']];
       case 'user-audiobook':

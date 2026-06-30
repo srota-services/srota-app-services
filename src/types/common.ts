@@ -37,7 +37,8 @@ export interface PaginatedResponse<T> extends ApiResponse<T[]> {
 // Filter parameters for audiobooks
 export interface AudioBookFilters {
   genre?: string;
-  language?: string;
+  languageId?: string;
+  languageIds?: string[];
   author?: string;
   narrator?: string;
   isActive?: boolean;

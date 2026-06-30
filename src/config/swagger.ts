@@ -136,7 +136,7 @@ const options: swaggerJsdoc.Options = {
             },
             AudioBook: {
                type: 'object',
-               required: ['id', 'title', 'author', 'language', 'isActive', 'isPublic', 'owner'],
+               required: ['id', 'title', 'author', 'languageId', 'isActive', 'isPublic', 'owner'],
                properties: {
                   id: {
                      type: 'string',
@@ -196,10 +196,14 @@ const options: swaggerJsdoc.Options = {
                      example: 'Fiction',
                      nullable: true
                   },
-                  language: {
+                  languageId: {
                      type: 'string',
-                     description: 'Language of the audiobook',
-                     example: 'English'
+                     description: 'Language catalog ID',
+                     example: 'cl000000000000000000000002',
+                  },
+                  language: {
+                     $ref: '#/components/schemas/Language',
+                     description: 'Nested language details when included in response',
                   },
                   publisher: {
                      type: 'string',
@@ -302,10 +306,10 @@ const options: swaggerJsdoc.Options = {
                      format: 'binary',
                      description: 'Cover image file (required on create)'
                   },
-                  language: {
+                  languageId: {
                      type: 'string',
-                     example: 'bn',
-                     default: 'bn'
+                     example: 'cl000000000000000000000002',
+                     description: 'Language catalog ID (defaults to Bengali when omitted on create)',
                   },
                   publisher: { type: 'string', example: 'Penguin Random House' },
                   publishDate: { type: 'string', format: 'date', example: '1925-04-10' },
@@ -360,7 +364,7 @@ const options: swaggerJsdoc.Options = {
                   coverImage: { type: 'string', format: 'binary', description: 'Cover image file (required on create)' },
                   narrator: { type: 'string', description: 'Optional narrator name' },
                   description: { type: 'string', description: 'Optional description' },
-                  language: { type: 'string', example: 'bn', description: 'Optional language code (defaults to bn)' },
+                  languageId: { type: 'string', example: 'cl000000000000000000000002', description: 'Optional language catalog ID (defaults to Bengali)' },
                   publisher: { type: 'string', description: 'Optional publisher' },
                   publishDate: { type: 'string', format: 'date', description: 'Optional publication date' },
                   isbn: { type: 'string', description: 'Optional ISBN' },
@@ -420,10 +424,14 @@ const options: swaggerJsdoc.Options = {
                      description: 'Genre of the audiobook',
                      example: 'Fiction'
                   },
-                  language: {
+                  languageId: {
                      type: 'string',
-                     description: 'Language of the audiobook',
-                     example: 'English'
+                     description: 'Language catalog ID',
+                     example: 'cl000000000000000000000002',
+                  },
+                  language: {
+                     $ref: '#/components/schemas/Language',
+                     description: 'Nested language details when included in response',
                   },
                   publisher: {
                      type: 'string',
@@ -526,7 +534,11 @@ const options: swaggerJsdoc.Options = {
                      items: {
                         type: 'object',
                         properties: {
-                           language: {
+                           languageId: {
+                              type: 'string',
+                              example: 'cl000000000000000000000002'
+                           },
+                           languageName: {
                               type: 'string',
                               example: 'English'
                            },
@@ -912,6 +924,16 @@ const options: swaggerJsdoc.Options = {
                   updatedAt: { type: 'string', format: 'date-time' },
                },
             },
+            Language: {
+               type: 'object',
+               properties: {
+                  id: { type: 'string', example: 'cl000000000000000000000002' },
+                  name: { type: 'string', example: 'Bengali' },
+                  code: { type: 'string', example: 'bn' },
+                  createdAt: { type: 'string', format: 'date-time' },
+                  updatedAt: { type: 'string', format: 'date-time' },
+               },
+            },
             AuthorProfile: {
                type: 'object',
                properties: {
@@ -967,7 +989,12 @@ const options: swaggerJsdoc.Options = {
                         filePath: '/uploads/audiobooks/great-gatsby.mp3',
                         coverImage: 'https://example.com/covers/great-gatsby.jpg',
                         genre: 'Fiction',
-                        language: 'English',
+                        languageId: 'cl000000000000000000000002',
+                        language: {
+                           id: 'cl000000000000000000000002',
+                           name: 'English',
+                           code: 'en',
+                        },
                         publisher: 'Penguin Random House',
                         publishDate: '1925-04-10',
                         isbn: '978-0-7432-7356-5',
@@ -1239,15 +1266,15 @@ const options: swaggerJsdoc.Options = {
                   example: 'clxyz1234567890abcdefghij'
                }
             },
-            LanguageParam: {
-               name: 'language',
+            LanguageIdParam: {
+               name: 'languageId',
                in: 'query',
-               description: 'Filter by language',
+               description: 'Filter by language ID (supports comma-separated languageIds for multiple languages)',
                required: false,
                schema: {
                   type: 'string',
-                  example: 'English'
-               }
+                  example: 'cl000000000000000000000002',
+               },
             },
             AuthorParam: {
                name: 'author',
@@ -1484,6 +1511,10 @@ const options: swaggerJsdoc.Options = {
          {
             name: 'AudioBooks',
             description: 'Operations related to audiobooks'
+         },
+         {
+            name: 'Languages',
+            description: 'Official language catalog'
          },
          {
             name: 'Comments',

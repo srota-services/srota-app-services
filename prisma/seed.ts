@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { PrismaClient } from '@prisma/client';
 import { seedImagePlaceholderSpecs } from './imagePlaceholderSpecs.seed';
+import { DEFAULT_LANGUAGES } from '../src/constants/defaultLanguages';
 
 const prisma = new PrismaClient();
 
@@ -238,6 +239,19 @@ async function seedGenres(): Promise<void> {
    }
 }
 
+async function seedLanguages(): Promise<void> {
+   console.log('Seeding languages...');
+
+   for (const language of DEFAULT_LANGUAGES) {
+      const row = await prisma.language.upsert({
+         where: { code: language.code },
+         update: { name: language.name },
+         create: { name: language.name, code: language.code },
+      });
+      console.log(`  ${row.name} (${row.code})`);
+   }
+}
+
 async function seedMoods(): Promise<void> {
    console.log('Seeding moods...');
 
@@ -340,6 +354,7 @@ async function main(): Promise<void> {
 
    await seedTags();
    await seedGenres();
+   await seedLanguages();
    await seedMoods();
    await seedMoodAssets();
    await seedImagePlaceholderSpecs(prisma);

@@ -25,7 +25,7 @@ describe('AudioBookOwnerService', () => {
       id: 'book-1',
       title: 'Title',
       author: 'Author',
-      language: 'en',
+      languageId: 'lang-en',
       isActive: true,
       isPublic: true,
       subscriptionGatingMode: 'NONE',

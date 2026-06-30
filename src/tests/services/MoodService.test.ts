@@ -189,7 +189,7 @@ describe('MoodService', () => {
                id: 'ab1',
                title: 'Book One',
                author: 'Author',
-               language: 'en',
+               languageId: 'lang-en',
                isActive: true,
                isPublic: true,
                subscriptionGatingMode: 'NONE' as const,

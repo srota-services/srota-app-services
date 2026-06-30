@@ -29,6 +29,7 @@ describe('AudioBookService.createAudioBook validation and persistence', () => {
    const mockGenreFindMany = jest.fn();
    const mockTagFindMany = jest.fn();
    const mockMoodFindUnique = jest.fn();
+   const mockLanguageFindUnique = jest.fn();
    const mockValidateUploadSource = jest.fn();
    const mockGenerateAndStoreVariants = jest.fn();
    const mockTransaction = jest.fn();
@@ -47,7 +48,14 @@ describe('AudioBookService.createAudioBook validation and persistence', () => {
       author: baseCreateData.author,
       ownerType: 'AUTHOR',
       ownerId: 'author-1',
-      language: 'bn',
+      languageId: 'lang-bn',
+      language: {
+         id: 'lang-bn',
+         name: 'Bengali',
+         code: 'bn',
+         createdAt: new Date(),
+         updatedAt: new Date(),
+      },
       isPublic: true,
       isActive: true,
       audiobookTags: [],
@@ -66,6 +74,7 @@ describe('AudioBookService.createAudioBook validation and persistence', () => {
       mockGenreFindMany.mockResolvedValue([{ id: 'genre-1' }]);
       mockTagFindMany.mockResolvedValue([]);
       mockMoodFindUnique.mockResolvedValue(null);
+      mockLanguageFindUnique.mockResolvedValue({ id: 'lang-bn' });
       mockFindUnique.mockResolvedValue(createdAudiobook);
 
       mockTransaction.mockImplementation(async (arg: unknown) => {
@@ -90,6 +99,7 @@ describe('AudioBookService.createAudioBook validation and persistence', () => {
          genre: { findMany: mockGenreFindMany },
          tag: { findMany: mockTagFindMany },
          mood: { findUnique: mockMoodFindUnique },
+         language: { findUnique: mockLanguageFindUnique },
          audioBook: {
             create: mockCreate,
             delete: mockDeleteAudiobook,

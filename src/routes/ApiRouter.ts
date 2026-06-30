@@ -13,6 +13,7 @@ import { createBookmarkRoutes } from './bookmarkRoutes';
 import { createOfflineDownloadRoutes } from './offlineDownloadRoutes';
 import { createHealthRoutes } from './healthRoutes';
 import { createGenreRoutes } from './genreRoutes';
+import { createLanguageRoutes } from './languageRoutes';
 import { createMoodRoutes } from './moodRoutes';
 import { createStreamingRoutes } from './streamingRoutes';
 import { createUserProfileRoutes } from './userProfileRoutes';
@@ -88,6 +89,7 @@ export class ApiRouter {
     // Catalog routes (guest browse)
     v1Router.use('/audiobooks', createAudioBookRoutes(this.prisma));
     v1Router.use('/genres', createGenreRoutes(this.prisma));
+    v1Router.use('/languages', createLanguageRoutes(this.prisma));
     v1Router.use('/moods', createMoodRoutes(this.prisma));
     v1Router.use('/tags', createTagRoutes(this.prisma));
     v1Router.use('/organizations', createOrganizationCatalogRoutes(this.prisma));

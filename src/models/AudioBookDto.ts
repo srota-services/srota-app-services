@@ -4,6 +4,7 @@
  */
 import { AudioBook as PrismaAudioBook, AudioBookOwnerType as PrismaAudioBookOwnerType, SubscriptionGatingMode, SubscriptionTierLevel } from '@prisma/client';
 import { SubscriptionAccessDto } from './SubscriptionAccessDto';
+import { LanguageDto, toLanguageDto } from './LanguageDto';
 
 export type { SubscriptionAccessDto };
 /** @deprecated Use SubscriptionAccessDto */
@@ -57,7 +58,8 @@ export interface AudioBookDto {
   fileSize?: number | undefined;
   coverImage?: string | undefined;
   imageAssets?: Record<string, string>;
-  language: string;
+  languageId: string;
+  language?: LanguageDto;
   publisher?: string | undefined;
   publishDate?: Date | undefined;
   isbn?: string | undefined;
@@ -96,7 +98,7 @@ export interface CreateAudioBookDto {
   fileSize?: number;
   coverImage?: string;
   genreIds: string[]; // Required - at least one genre is mandatory
-  language?: string;
+  languageId?: string;
   publisher?: string;
   publishDate?: Date;
   isbn?: string;
@@ -118,7 +120,7 @@ export interface UpdateAudioBookDto {
   fileSize?: number;
   coverImage?: string;
   genreIds?: string[];
-  language?: string;
+  languageId?: string;
   publisher?: string;
   publishDate?: Date;
   isbn?: string;
@@ -141,7 +143,7 @@ export interface AudioBookQueryParams {
   ownerId?: string | undefined;
   /** Optional filter: restrict to these owner IDs (same ownerType). */
   ownerIds?: string[] | undefined;
-  language?: string | undefined;
+  languageIds?: string[] | undefined;
   author?: string | undefined;
   narrator?: string | undefined;
   isActive?: boolean | undefined;
@@ -177,6 +179,7 @@ export function toSubscriptionGatingModeDto(mode: SubscriptionGatingMode): Subsc
  * Convert Prisma AudioBook to DTO (owner details hydrated separately).
  */
 export function toAudioBookDto(audiobook: PrismaAudioBook & {
+  language?: { id: string; name: string; code: string; createdAt: Date; updatedAt: Date };
   audiobookTags?: Array<{ id: string; audiobookId: string; tagId: string; createdAt: Date; tag: { id: string; name: string; createdAt: Date; updatedAt: Date } }>;
   audioBookGenres?: Array<{ id: string; audiobookId: string; genreId: string; createdAt: Date; genre: { id: string; name: string; createdAt: Date; updatedAt: Date } }>;
 }): AudioBookDto {
@@ -189,7 +192,8 @@ export function toAudioBookDto(audiobook: PrismaAudioBook & {
     duration: audiobook.duration ?? undefined,
     fileSize: audiobook.fileSize ? Number(audiobook.fileSize) : undefined,
     coverImage: audiobook.coverImage || undefined,
-    language: audiobook.language,
+    languageId: audiobook.languageId,
+    ...(audiobook.language ? { language: toLanguageDto(audiobook.language) } : {}),
     publisher: audiobook.publisher || undefined,
     publishDate: audiobook.publishDate || undefined,
     isbn: audiobook.isbn || undefined,
