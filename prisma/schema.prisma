@@ -62,8 +62,8 @@ model AudioBook {
   ownerId   String
 
   // Metadata
-  language       String    @default("bn")
-  publisher      String?
+  languageId String
+  publisher  String?
   publishDate    DateTime?
   isbn           String?   @unique
 
@@ -89,6 +89,7 @@ model AudioBook {
   moodId String?
 
   // Relations
+  language         Language           @relation(fields: [languageId], references: [id], onDelete: Restrict)
   mood             Mood?              @relation(fields: [moodId], references: [id], onDelete: SetNull)
   userAudioBooks   UserAudioBook[]
   reviews          Review[]
@@ -104,6 +105,7 @@ model AudioBook {
 
   @@index([ownerType, ownerId])
   @@index([moodId])
+  @@index([languageId])
   @@map("audiobooks")
 }
 
@@ -159,6 +161,20 @@ model Genre {
   audioBookGenres AudioBookGenre[]
 
   @@map("genres")
+}
+
+// Official language catalog (Eighth Schedule Indian languages)
+model Language {
+  id   String @id @default(cuid())
+  name String @unique
+  code String @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  audiobooks AudioBook[]
+
+  @@map("languages")
 }
 
 model AuthorProfile {

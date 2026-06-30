@@ -14,6 +14,7 @@ export type AppDomainResource =
    | 'note'
    | 'tag'
    | 'genre'
+   | 'language'
    | 'mood'
    | 'user-audiobook'
    | 'subscription-catalog'

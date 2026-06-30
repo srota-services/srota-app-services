@@ -61,7 +61,7 @@ export class ValidationMiddleware {
    * Validate audiobook filter parameters
    */
   static validateAudioBookFilters(req: Request, res: Response, next: NextFunction): void {
-    const { genre, language, author, narrator, isActive, isPublic, search, moodId, moodIds, ownerType, ownerId, ownerIds } = req.query;
+    const { genre, author, narrator, isActive, isPublic, search, moodId, moodIds, languageId, languageIds, ownerType, ownerId, ownerIds } = req.query;
 
     const cuidRegex = /^c[a-z0-9]{24}$/;
 
@@ -125,6 +125,37 @@ export class ValidationMiddleware {
       delete req.query['moodId'];
     }
 
+    const languageIdValues: string[] = [];
+
+    if (languageId !== undefined) {
+      if (typeof languageId !== 'string' || !cuidRegex.test(languageId)) {
+        ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.language_id_invalid'));
+        return;
+      }
+      languageIdValues.push(languageId);
+    }
+
+    if (languageIds !== undefined) {
+      const rawLanguageIds = Array.isArray(languageIds)
+        ? languageIds
+        : typeof languageIds === 'string'
+          ? languageIds.split(',').map((id: string) => id.trim()).filter((id: string) => id.length > 0)
+          : [];
+
+      for (const id of rawLanguageIds) {
+        if (typeof id !== 'string' || !cuidRegex.test(id)) {
+          ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.language_id_invalid'));
+          return;
+        }
+        languageIdValues.push(id);
+      }
+    }
+
+    if (languageIdValues.length > 0) {
+      req.query['languageIds'] = languageIdValues.join(',');
+      delete req.query['languageId'];
+    }
+
     // Validate boolean parameters
     if (isActive !== undefined) {
       if (!['true', 'false'].includes(isActive as string)) {
@@ -142,7 +173,7 @@ export class ValidationMiddleware {
 
     // Validate string parameters length
     const maxLength = MessageHandler.getValidationRule('string_fields.max_length');
-    const stringParams = { genre, language, author, narrator, search };
+    const stringParams = { genre, author, narrator, search };
     for (const [key, value] of Object.entries(stringParams)) {
       if (value !== undefined && typeof value === 'string' && value.length > maxLength) {
         ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.string_length', { field: key }));
@@ -564,7 +595,7 @@ export class ValidationMiddleware {
    */
   static sanitizeQueryParams(req: Request, _res: Response, next: NextFunction): void {
     // Sanitize string parameters
-    const stringFields = ['genre', 'language', 'author', 'narrator', 'search', 'sortBy'];
+    const stringFields = ['genre', 'author', 'narrator', 'search', 'sortBy'];
 
     for (const field of stringFields) {
       if (req.query[field]) {

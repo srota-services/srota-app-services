@@ -29,6 +29,12 @@ success:
   genres:
     retrieved: "Genres retrieved successfully"
 
+  languages:
+    retrieved: "Languages retrieved successfully"
+    created: "Language created successfully"
+    updated: "Language updated successfully"
+    deleted: "Language deleted successfully"
+
   tags:
     retrieved: "Tags retrieved successfully"
     created: "Tag created successfully"
@@ -242,6 +248,9 @@ errors:
     playlist_name_too_long: "Playlist name is too long"
     playlist_item_position_invalid: "Playlist item position must be a positive number"
     organization_ids_invalid: "Organization list contains invalid entries"
+    language_id_invalid: "Choose a valid language"
+    language_name_invalid: "Language name is required and must be 100 characters or fewer"
+    language_code_invalid: "Language code is required and must use letters, numbers, or hyphens only"
 
     # User authentication validation
     email_required: "Email is required"
@@ -326,6 +335,16 @@ errors:
     update_failed: "Failed to update genre"
     delete_failed: "Failed to delete genre"
     name_exists: "Genre name already exists"
+
+  languages:
+    not_found: "Language not found"
+    fetch_failed: "Failed to load languages"
+    create_failed: "Failed to create language"
+    update_failed: "Failed to update language"
+    delete_failed: "Failed to delete language"
+    name_exists: "A language with this name already exists"
+    code_exists: "A language with this code already exists"
+    in_use: "This language is assigned to audiobooks and cannot be deleted"
 
   tags:
     not_found: "Tag not found"

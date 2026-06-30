@@ -59,6 +59,17 @@ export class AudioBookController {
       moodIds = [req.query['moodId'] as string];
     }
 
+    let languageIds: string[] | undefined = undefined;
+    if (req.query['languageIds']) {
+      if (Array.isArray(req.query['languageIds'])) {
+        languageIds = req.query['languageIds'] as string[];
+      } else if (typeof req.query['languageIds'] === 'string') {
+        languageIds = req.query['languageIds'].split(',').map((id: string) => id.trim()).filter((id: string) => id.length > 0);
+      }
+    } else if (req.query['languageId']) {
+      languageIds = [req.query['languageId'] as string];
+    }
+
     const queryParams = applyGuestCatalogDefaults(req, {
       page: req.query['page'] ? parseInt(req.query['page'] as string, 10) : 1,
       limit: req.query['limit'] ? parseInt(req.query['limit'] as string, 10) : 10,
@@ -66,9 +77,9 @@ export class AudioBookController {
       sortOrder: (req.query['sortOrder'] as 'asc' | 'desc') || 'desc',
       genreIds: genreIds,
       moodIds: moodIds,
+      languageIds: languageIds,
       ownerType: req.query['ownerType'] as AudioBookQueryParams['ownerType'],
       ownerId: req.query['ownerId'] as string,
-      language: req.query['language'] as string,
       author: req.query['author'] as string,
       narrator: req.query['narrator'] as string,
       isActive: req.query['isActive'] !== undefined ? req.query['isActive'] === 'true' : undefined,
@@ -478,13 +489,24 @@ export class AudioBookController {
       genreIds = [req.query['genreId'] as string];
     }
 
+    let languageIds: string[] | undefined = undefined;
+    if (req.query['languageIds']) {
+      if (Array.isArray(req.query['languageIds'])) {
+        languageIds = req.query['languageIds'] as string[];
+      } else if (typeof req.query['languageIds'] === 'string') {
+        languageIds = req.query['languageIds'].split(',').map((id: string) => id.trim()).filter((id: string) => id.length > 0);
+      }
+    } else if (req.query['languageId']) {
+      languageIds = [req.query['languageId'] as string];
+    }
+
     const queryParams = applyGuestCatalogDefaults(req, {
       page: parseInt(page as string, 10),
       limit: parseInt(limit as string, 10),
       sortBy: sortBy as string,
       sortOrder: sortOrder as 'asc' | 'desc',
       genreIds: genreIds,
-      language: req.query['language'] as string,
+      languageIds: languageIds,
       author: req.query['author'] as string,
       narrator: req.query['narrator'] as string,
       isActive: req.query['isActive'] !== undefined ? req.query['isActive'] === 'true' : undefined,

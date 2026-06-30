@@ -92,7 +92,7 @@ describe('FileUrlService', () => {
             id: 'ab-1',
             title: 'Title',
             author: 'Author',
-            language: 'en',
+            languageId: 'lang-en',
             isActive: true,
             isPublic: true,
             subscriptionGatingMode: 'NONE',

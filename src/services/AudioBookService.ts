@@ -34,6 +34,21 @@ import { emitSubscriptionGatingInvalidation } from './subscriptionGatingInvalida
 import { SubscriptionAccessService } from './SubscriptionAccessService';
 import { runInTransaction, runWrite } from '../utils/prismaTransaction';
 import { rethrowServiceError } from '../utils/serviceError';
+import { DEFAULT_LANGUAGE_CODE } from '../constants/defaultLanguages';
+
+const AUDIOBOOK_RELATIONS_INCLUDE = {
+  language: true,
+  audiobookTags: {
+    include: {
+      tag: true,
+    },
+  },
+  audioBookGenres: {
+    include: {
+      genre: true,
+    },
+  },
+} as const;
 
 export class AudioBookService {
   private prisma: PrismaClient;
@@ -106,16 +121,7 @@ export class AudioBookService {
                 chapters: true,
               },
             },
-            audiobookTags: {
-              include: {
-                tag: true
-              }
-            },
-            audioBookGenres: {
-              include: {
-                genre: true,
-              }
-            }
+            ...AUDIOBOOK_RELATIONS_INCLUDE,
           }
         }),
         this.prisma.audioBook.count({ where })
@@ -158,16 +164,7 @@ export class AudioBookService {
               chapters: true,
             },
           },
-          audiobookTags: {
-            include: {
-              tag: true,
-            },
-          },
-          audioBookGenres: {
-            include: {
-              genre: true,
-            },
-          },
+          ...AUDIOBOOK_RELATIONS_INCLUDE,
         },
       });
 
@@ -199,7 +196,7 @@ export class AudioBookService {
       ownerType,
       ownerId,
       ownerIds,
-      language,
+      languageIds,
       author,
       narrator,
       isActive,
@@ -231,7 +228,9 @@ export class AudioBookService {
       ...(moodIds && moodIds.length > 0 && {
         moodId: { in: moodIds },
       }),
-      ...(language && { language: { contains: language, mode: 'insensitive' } }),
+      ...(languageIds && languageIds.length > 0 && {
+        languageId: { in: languageIds },
+      }),
       ...(author && { author: { contains: author, mode: 'insensitive' } }),
       ...(narrator && { narrator: { contains: narrator, mode: 'insensitive' } }),
       ...(active === true && { isActive: true }),
@@ -256,18 +255,7 @@ export class AudioBookService {
     try {
       const audiobook = await this.prisma.audioBook.findUnique({
         where: { id },
-        include: {
-          audiobookTags: {
-            include: {
-              tag: true
-            }
-          },
-          audioBookGenres: {
-            include: {
-              genre: true,
-            }
-          }
-        }
+        include: AUDIOBOOK_RELATIONS_INCLUDE,
       });
 
       if (!audiobook) {
@@ -295,16 +283,7 @@ export class AudioBookService {
           chapters: {
             orderBy: { chapterNumber: 'asc' }
           },
-          audiobookTags: {
-            include: {
-              tag: true
-            }
-          },
-          audioBookGenres: {
-            include: {
-              genre: true,
-            }
-          }
+          ...AUDIOBOOK_RELATIONS_INCLUDE,
         }
       });
 
@@ -377,13 +356,16 @@ export class AudioBookService {
 
       await this.validateReferencedIds(genreIds!, tagIds, moodIdForCreate);
 
+      const languageIdForCreate = await this.resolveLanguageIdForCreate(audiobookData.languageId);
+      await this.validateLanguageId(languageIdForCreate);
+
       // Construct data object, only including defined values for optional fields
       const createData: Prisma.AudioBookUncheckedCreateInput = {
         title: audiobookData.title,
         author: audiobookData.author,
         ownerType: toPrismaOwnerType(audiobookData.owner.type),
         ownerId: audiobookData.owner.id,
-        language: audiobookData.language || 'bn',
+        languageId: languageIdForCreate,
         isPublic: this.parseBooleanFlag(audiobookData.isPublic, true),
       };
 
@@ -475,18 +457,7 @@ export class AudioBookService {
       // Fetch the audiobook with all relations included
       const audiobookWithRelations = await this.prisma.audioBook.findUnique({
         where: { id: audiobook.id },
-        include: {
-          audiobookTags: {
-            include: {
-              tag: true
-            }
-          },
-          audioBookGenres: {
-            include: {
-              genre: true,
-            }
-          }
-        }
+        include: AUDIOBOOK_RELATIONS_INCLUDE,
       });
 
       if (!audiobookWithRelations) {
@@ -567,6 +538,10 @@ export class AudioBookService {
         await this.validateReferencedIds(genreIds.length > 0 ? genreIds : [], tagIds);
       } else if (tagIds !== undefined && tagIds.length > 0) {
         await this.validateReferencedIds([], tagIds);
+      }
+
+      if (data.languageId !== undefined) {
+        await this.validateLanguageId(data.languageId);
       }
 
       let gating: Awaited<ReturnType<typeof resolveAudiobookGatingUpdate>> | undefined;
@@ -651,18 +626,7 @@ export class AudioBookService {
       // Fetch the audiobook with all relations included
       const audiobookWithRelations = await this.prisma.audioBook.findUnique({
         where: { id },
-        include: {
-          audiobookTags: {
-            include: {
-              tag: true
-            }
-          },
-          audioBookGenres: {
-            include: {
-              genre: true,
-            }
-          }
-        }
+        include: AUDIOBOOK_RELATIONS_INCLUDE,
       });
 
       if (!audiobookWithRelations) {
@@ -824,18 +788,7 @@ export class AudioBookService {
           orderBy,
           skip,
           take: limit,
-          include: {
-            audiobookTags: {
-              include: {
-                tag: true
-              }
-            },
-            audioBookGenres: {
-              include: {
-                genre: true,
-              }
-            }
-          }
+          include: AUDIOBOOK_RELATIONS_INCLUDE,
         }),
         this.prisma.audioBook.count({ where })
       ]);
@@ -978,6 +931,34 @@ export class AudioBookService {
     }
   }
 
+  private async validateLanguageId(languageId: string): Promise<void> {
+    const language = await this.prisma.language.findUnique({
+      where: { id: languageId },
+      select: { id: true },
+    });
+
+    if (!language) {
+      throw ApiError.validationError(MessageHandler.getErrorMessage('validation.language_id_invalid'));
+    }
+  }
+
+  private async resolveLanguageIdForCreate(languageId?: string): Promise<string> {
+    if (languageId && languageId.trim().length > 0) {
+      return languageId.trim();
+    }
+
+    const defaultLanguage = await this.prisma.language.findUnique({
+      where: { code: DEFAULT_LANGUAGE_CODE },
+      select: { id: true },
+    });
+
+    if (!defaultLanguage) {
+      throw ApiError.internalError(MessageHandler.getErrorMessage('languages.fetch_failed'));
+    }
+
+    return defaultLanguage.id;
+  }
+
   private async rollbackAudiobookCreate(audiobookId: string): Promise<void> {
     try {
       await runInTransaction(this.prisma, async (tx) => {
@@ -1068,7 +1049,7 @@ export class AudioBookService {
     if (data.coverImage !== undefined && !options?.coverImageSourcePath) {
       updateData.coverImage = data.coverImage;
     }
-    if (data.language !== undefined) updateData.language = data.language;
+    if (data.languageId !== undefined) updateData.languageId = data.languageId;
     if (data.publisher !== undefined) updateData.publisher = data.publisher;
     if (data.publishDate !== undefined) {
       updateData.publishDate = data.publishDate instanceof Date
