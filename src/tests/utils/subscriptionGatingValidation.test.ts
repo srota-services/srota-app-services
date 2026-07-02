@@ -138,6 +138,19 @@ describe('subscriptionGatingValidation', () => {
          });
       });
 
+      it('creates CHAPTER mode when minSubscriptionTier is 0 (ignored at audiobook level)', () => {
+         expect(
+            resolveAudiobookGatingCreate({
+               subscriptionGatingMode: 'CHAPTER',
+               minSubscriptionTier: 0 as unknown as SubscriptionTierLevel,
+            }),
+         ).toEqual({
+            subscriptionGatingMode: SubscriptionGatingMode.CHAPTER,
+            minSubscriptionTier: null,
+            chapterSyncTier: null,
+         });
+      });
+
       it('rejects AUDIOBOOK mode without tier', () => {
          expect(() =>
             resolveAudiobookGatingCreate({
@@ -260,7 +273,7 @@ describe('subscriptionGatingValidation', () => {
          ).resolves.toBe(SubscriptionTierLevel.STANDARD);
       });
 
-      it('requires explicit tier in CHAPTER mode', async () => {
+      it('defaults chapter 1 to free in CHAPTER mode', async () => {
          mockPrisma.audioBook.findUnique.mockResolvedValue({
             subscriptionGatingMode: SubscriptionGatingMode.CHAPTER,
             minSubscriptionTier: null,
@@ -268,6 +281,28 @@ describe('subscriptionGatingValidation', () => {
 
          await expect(
             resolveChapterTierForCreate(mockPrisma, 'ab-1', 1, undefined),
+         ).resolves.toBeNull();
+      });
+
+      it('rejects paid tier on chapter 1 in CHAPTER mode', async () => {
+         mockPrisma.audioBook.findUnique.mockResolvedValue({
+            subscriptionGatingMode: SubscriptionGatingMode.CHAPTER,
+            minSubscriptionTier: null,
+         });
+
+         await expect(
+            resolveChapterTierForCreate(mockPrisma, 'ab-1', 1, SubscriptionTierLevel.BASE),
+         ).rejects.toBeInstanceOf(ApiError);
+      });
+
+      it('requires explicit tier in CHAPTER mode for chapter 2 and later', async () => {
+         mockPrisma.audioBook.findUnique.mockResolvedValue({
+            subscriptionGatingMode: SubscriptionGatingMode.CHAPTER,
+            minSubscriptionTier: null,
+         });
+
+         await expect(
+            resolveChapterTierForCreate(mockPrisma, 'ab-1', 2, undefined),
          ).rejects.toBeInstanceOf(ApiError);
       });
 
@@ -353,6 +388,10 @@ describe('subscriptionGatingValidation', () => {
    });
 
    describe('parseOptionalMinSubscriptionTierFromForm', () => {
+      it('parses numeric alias "0" to free (null)', () => {
+         expect(parseOptionalMinSubscriptionTierFromForm('0')).toBeNull();
+      });
+
       it('parses numeric alias "2" to STANDARD', () => {
          expect(parseOptionalMinSubscriptionTierFromForm('2')).toBe(SubscriptionTierLevel.STANDARD);
       });

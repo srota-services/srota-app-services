@@ -233,6 +233,7 @@ errors:
     subscription_gating_tier_required: "Choose a subscription plan for this audiobook"
     chapter_tier_not_allowed: "Chapter access can only be set when the audiobook uses per-chapter access"
     chapter_tier_required: "Choose an access level for this chapter"
+    chapter_first_must_be_free: "Chapter 1 must be free for everyone when the audiobook uses per-chapter access"
     chapter_tier_sequence_invalid: "Later chapters cannot require a lower plan than earlier ones"
     chapter_tier_increase_limit_exceeded: "An audiobook can have at most two plan upgrades across its chapters"
     subscription_tier_cannot_decrease: "You can only keep or raise the access level"

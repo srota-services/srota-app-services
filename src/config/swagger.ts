@@ -581,7 +581,7 @@ const options: swaggerJsdoc.Options = {
                      enum: ['BASE', 'STANDARD', 'PREMIUM'],
                      nullable: true,
                      description:
-                        'Minimum tier when parent audiobook uses CHAPTER gating. Required on create. Tiers must be non-decreasing by chapterNumber, with at most two tier step-ups across the audiobook. Tiers cannot be reduced on update. Under AUDIOBOOK gating, inherited from the parent audiobook.',
+                        'Minimum tier when parent audiobook uses CHAPTER gating. Chapter 1 must be null (free for all users). Later chapters require a tier on create. Tiers must be non-decreasing by chapterNumber, with at most two tier step-ups across the audiobook. Tiers cannot be reduced on update. Under AUDIOBOOK gating, inherited from the parent audiobook.',
                   },
                   subscriptionAccess: {
                      $ref: '#/components/schemas/SubscriptionAccess',

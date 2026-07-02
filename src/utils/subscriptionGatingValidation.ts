@@ -7,6 +7,7 @@ import {
    MAX_CHAPTER_TIER_INCREASES,
    TIER_NUMERIC_ALIAS,
    countTierStepUps,
+   isFreeTierInput,
    isNonDecreasingSequence,
    maxTierLevelFromChapters,
    sortChaptersByNumber,
@@ -46,7 +47,7 @@ export function parseSubscriptionGatingMode(
 export function validateMinSubscriptionTierValue(
    value: SubscriptionTierLevel | string | null | undefined,
 ): SubscriptionTierLevel | null {
-   if (value === null || value === undefined) {
+   if (isFreeTierInput(value)) {
       return null;
    }
    if (ALL_TIER_LEVELS.includes(value as SubscriptionTierLevel)) {
@@ -67,7 +68,7 @@ export function parseOptionalMinSubscriptionTierFromForm(
       return null;
    }
    const str = String(value).trim();
-   if (TIER_NUMERIC_ALIAS[str]) {
+   if (str in TIER_NUMERIC_ALIAS) {
       return TIER_NUMERIC_ALIAS[str]!;
    }
    return validateMinSubscriptionTierValue(str);
@@ -177,6 +178,15 @@ export async function resolveAudiobookGatingUpdate(
       input.subscriptionGatingMode !== undefined
          ? parseSubscriptionGatingMode(input.subscriptionGatingMode)
          : undefined;
+
+   if (parsedMode === SubscriptionGatingMode.CHAPTER) {
+      return {
+         subscriptionGatingMode: SubscriptionGatingMode.CHAPTER,
+         minSubscriptionTier: null,
+         chapterSyncTier: null,
+      };
+   }
+
    const parsedTier =
       input.minSubscriptionTier !== undefined
          ? validateMinSubscriptionTierValue(input.minSubscriptionTier)
@@ -240,6 +250,16 @@ export function resolveAudiobookGatingCreate(input: AudiobookGatingInput): Resol
       input.subscriptionGatingMode !== undefined
          ? parseSubscriptionGatingMode(input.subscriptionGatingMode)
          : undefined;
+
+   // CHAPTER mode ignores audiobook-level tier; tiers are set per chapter at creation.
+   if (parsedMode === SubscriptionGatingMode.CHAPTER) {
+      return {
+         subscriptionGatingMode: SubscriptionGatingMode.CHAPTER,
+         minSubscriptionTier: null,
+         chapterSyncTier: null,
+      };
+   }
+
    const parsedTier =
       input.minSubscriptionTier !== undefined
          ? validateMinSubscriptionTierValue(input.minSubscriptionTier)
@@ -353,7 +373,26 @@ export async function resolveChapterTierForCreate(
       return audiobook.minSubscriptionTier;
    }
 
-   // CHAPTER mode — explicit tier required
+   // CHAPTER mode
+   if (chapterNumber === 1) {
+      if (requestedTier !== undefined && requestedTier !== null) {
+         const parsedFirstChapterTier = validateMinSubscriptionTierValue(requestedTier);
+         if (parsedFirstChapterTier !== null) {
+            throw ApiError.validationError(
+               MessageHandler.getErrorMessage('validation.chapter_first_must_be_free'),
+            );
+         }
+      }
+
+      await validateChapterTierSequenceForAudiobook(
+         prisma,
+         audiobookId,
+         { chapterNumber, minSubscriptionTier: null },
+      );
+      return null;
+   }
+
+   // CHAPTER mode — explicit tier required for chapters after the first
    if (requestedTier === undefined) {
       throw ApiError.validationError(
          MessageHandler.getErrorMessage('validation.chapter_tier_required'),
