@@ -23,6 +23,7 @@ import { UserConsumerWorkerFactory } from './workers/UserConsumerWorker';
 import { SubscriptionConsumerWorkerFactory } from './workers/SubscriptionConsumerWorker';
 import { AuthorConsumerWorkerFactory } from './workers/AuthorConsumerWorker';
 import { EntityDeletionConsumerWorkerFactory } from './workers/EntityDeletionConsumerWorker';
+import { ChapterTranscodingCompletedConsumerWorkerFactory } from './workers/ChapterTranscodingCompletedConsumerWorker';
 import { prisma } from './lib/prisma';
 
 process.on('uncaughtException', (err) => {
@@ -95,6 +96,9 @@ queueManager.createCleanupQueue();
 
       // Start entity deletion consumer worker
       await EntityDeletionConsumerWorkerFactory.startWorker(prisma);
+
+      // Start chapter transcoding completed consumer worker
+      await ChapterTranscodingCompletedConsumerWorkerFactory.startWorker(prisma);
    } catch (error) {
       logger.error({ err: error }, 'Failed to initialize RabbitMQ, transcoding worker, or consumer workers');
    }

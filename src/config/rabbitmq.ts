@@ -5,6 +5,7 @@
 import * as amqp from 'amqplib';
 import { config } from './env';
 import { rabbitmqLogger } from './logger';
+import { ChapterTranscodingCompletedMessage } from '../types/chapter-events';
 
 export interface QueueConfig {
    name: string;
@@ -298,6 +299,22 @@ export class RabbitMQConnection {
       // Bind queue to exchange with routing key
       await this.channel.bindQueue(`${queuePrefix}.chapters.deleted`, 'chapters', 'chapter.deleted');
 
+      // Chapter transcoding completed queue (streaming-service → app-service)
+      await this.channel.assertQueue(`${queuePrefix}.chapters.transcoding.completed`, {
+         durable: true,
+         exclusive: false,
+         autoDelete: false,
+         arguments: {
+            'x-message-ttl': 3600000,
+         },
+      });
+
+      await this.channel.bindQueue(
+         `${queuePrefix}.chapters.transcoding.completed`,
+         'chapters',
+         'chapter.transcoding.completed',
+      );
+
       rabbitmqLogger.info('Chapters exchange and queue setup completed');
    }
 
@@ -501,6 +518,73 @@ export class RabbitMQConnection {
       } catch (error) {
          rabbitmqLogger.error({ err: error, chapterId: data.chapterId }, 'Error publishing chapter gating changed event');
          return false;
+      }
+   }
+
+   /**
+    * Consume chapter transcoding completed messages (streaming-service → app-service)
+    */
+   public async consumeChapterTranscodingCompletedMessages(
+      onMessage: (message: ChapterTranscodingCompletedMessage) => Promise<void>,
+   ): Promise<void> {
+      if (!this.channel) {
+         throw new Error('Channel not available');
+      }
+
+      const queuePrefix = config.RABBITMQ_QUEUE_PREFIX;
+      const queueName = `${queuePrefix}.chapters.transcoding.completed`;
+
+      try {
+         await this.channel.consume(queueName, async (msg) => {
+            if (!msg) {
+               return;
+            }
+
+            try {
+               const messageContent = JSON.parse(msg.content.toString()) as ChapterTranscodingCompletedMessage;
+               rabbitmqLogger.info(
+                  { chapterId: messageContent.chapterId, audiobookId: messageContent.audiobookId },
+                  'Received chapter transcoding completed message',
+               );
+
+               await onMessage(messageContent);
+
+               this.channel!.ack(msg);
+               rabbitmqLogger.info(
+                  { chapterId: messageContent.chapterId },
+                  'Processed chapter transcoding completed message',
+               );
+            } catch (error: any) {
+               rabbitmqLogger.error({ err: error }, 'Error processing chapter transcoding completed message');
+               this.channel!.ack(msg);
+            }
+         }, {
+            noAck: false,
+         });
+
+         rabbitmqLogger.info({ queueName }, 'Started consuming chapter transcoding completed messages');
+      } catch (error: any) {
+         rabbitmqLogger.error({ err: error }, 'Error setting up chapter transcoding completed consumer');
+         throw error;
+      }
+   }
+
+   /**
+    * Stop consuming chapter transcoding completed messages
+    */
+   public async stopConsumingChapterTranscodingCompletedMessages(): Promise<void> {
+      if (!this.channel) {
+         return;
+      }
+
+      const queuePrefix = config.RABBITMQ_QUEUE_PREFIX;
+      const queueName = `${queuePrefix}.chapters.transcoding.completed`;
+
+      try {
+         await this.channel.cancel(queueName);
+         rabbitmqLogger.info({ queueName }, 'Stopped consuming chapter transcoding completed messages');
+      } catch (error: any) {
+         rabbitmqLogger.error({ err: error }, 'Error stopping chapter transcoding completed consumer');
       }
    }
 

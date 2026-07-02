@@ -22,6 +22,7 @@ export interface ChapterData {
    endPosition: number;
    minSubscriptionTier?: SubscriptionTierLevel | null;
    isActive: boolean;
+   transcodingReady?: boolean;
    sourceUploadStatus?: 'pending' | 'ready' | 'failed';
    sourceUploadError?: string | null;
    createdAt: Date;
@@ -54,7 +55,6 @@ export interface CreateChapterRequest {
    coverImage?: string; // Optional in request, set from uploaded file
    startPosition: number;
    endPosition: number;
-   isActive?: boolean;
    minSubscriptionTier?: SubscriptionTierLevel | null;
    scheduledAt?: Date;
 }

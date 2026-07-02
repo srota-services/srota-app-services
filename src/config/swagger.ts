@@ -564,7 +564,16 @@ const options: swaggerJsdoc.Options = {
                   fileSize: { type: 'integer' },
                   coverImage: { type: 'string', description: 'Primary cover image (square_960 variant)' },
                   imageAssets: { $ref: '#/components/schemas/ImageAssetsMap' },
-                  isActive: { type: 'boolean' },
+                  isActive: {
+                     type: 'boolean',
+                     default: false,
+                     description: 'Whether the chapter is visible to listeners. Defaults to false; set to true after all transcoding bitrates complete.',
+                  },
+                  transcodingReady: {
+                     type: 'boolean',
+                     default: false,
+                     description: 'Whether all required HLS transcoding bitrates (64/128/256) have completed successfully.',
+                  },
                   sourceUploadStatus: {
                      type: 'string',
                      enum: ['pending', 'ready', 'failed'],

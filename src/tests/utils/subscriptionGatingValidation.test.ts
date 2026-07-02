@@ -385,6 +385,13 @@ describe('subscriptionGatingValidation', () => {
          expect(validateMinSubscriptionTierValue(SubscriptionTierLevel.BASE)).toBe(SubscriptionTierLevel.BASE);
          expect(validateMinSubscriptionTierValue(null)).toBeNull();
       });
+
+      it('accepts numeric aliases 1/2/3 from form-data', () => {
+         expect(validateMinSubscriptionTierValue(1)).toBe(SubscriptionTierLevel.BASE);
+         expect(validateMinSubscriptionTierValue(2)).toBe(SubscriptionTierLevel.STANDARD);
+         expect(validateMinSubscriptionTierValue(3)).toBe(SubscriptionTierLevel.PREMIUM);
+         expect(validateMinSubscriptionTierValue('3')).toBe(SubscriptionTierLevel.PREMIUM);
+      });
    });
 
    describe('parseOptionalMinSubscriptionTierFromForm', () => {

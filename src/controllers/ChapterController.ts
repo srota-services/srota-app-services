@@ -389,11 +389,6 @@ export class ChapterController {
          endPosition: parseInt(req.body.endPosition, 10),
       };
 
-      // Parse isActive if provided (defaults to true in service)
-      if (req.body.isActive !== undefined) {
-         chapterData.isActive = req.body.isActive === 'true' || req.body.isActive === true;
-      }
-
       // Parse scheduledAt if provided (can be ISO string or Date)
       if (req.body.scheduledAt) {
          chapterData.scheduledAt = new Date(req.body.scheduledAt);
