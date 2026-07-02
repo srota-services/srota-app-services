@@ -46,6 +46,7 @@ export interface DurationCalculationJobData {
 export interface ScheduledActivationJobData {
    type: 'audiobook' | 'chapter';
    id: string;
+   waitAttempt?: number;
 }
 
 export class BackgroundJobService {
@@ -216,7 +217,7 @@ export class BackgroundJobService {
 
       // Scheduled activation processor
       this.activationQueue.process('activate-scheduled', async (job) => {
-         const { type, id } = job.data;
+         const { type, id, waitAttempt = 0 } = job.data;
 
          try {
             if (type === 'audiobook') {
@@ -231,6 +232,38 @@ export class BackgroundJobService {
                );
                console.log(`Activated scheduled audiobook ${id}`);
             } else if (type === 'chapter') {
+               const chapter = await this.prisma.chapter.findUnique({
+                  where: { id },
+                  select: { transcodingReady: true },
+               });
+
+               if (!chapter) {
+                  console.warn(`Scheduled activation skipped — chapter ${id} not found`);
+                  return;
+               }
+
+               if (!chapter.transcodingReady) {
+                  const nextAttempt = waitAttempt + 1;
+                  const maxWaitAttempts = 20;
+
+                  if (nextAttempt >= maxWaitAttempts) {
+                     console.warn(`Scheduled activation gave up waiting for transcoding on chapter ${id}`);
+                     return;
+                  }
+
+                  await this.activationQueue.add(
+                     'activate-scheduled',
+                     { type, id, waitAttempt: nextAttempt },
+                     {
+                        jobId: `activation-chapter-${id}-wait-${nextAttempt}`,
+                        delay: 30_000,
+                        attempts: 1,
+                     },
+                  );
+                  console.log(`Scheduled activation deferred for chapter ${id} — transcoding not ready (attempt ${nextAttempt})`);
+                  return;
+               }
+
                await runWrite(this.prisma, async (tx) =>
                   tx.chapter.update({
                      where: { id },
@@ -379,6 +412,24 @@ export class BackgroundJobService {
                   }),
                );
             } else {
+               const chapter = await this.prisma.chapter.findUnique({
+                  where: { id },
+                  select: { transcodingReady: true },
+               });
+
+               if (!chapter?.transcodingReady) {
+                  await this.activationQueue.add(
+                     'activate-scheduled',
+                     { type, id, waitAttempt: 0 },
+                     {
+                        jobId: `activation-chapter-${id}-wait-0`,
+                        delay: 30_000,
+                        attempts: 1,
+                     },
+                  );
+                  return;
+               }
+
                await runWrite(this.prisma, async (tx) =>
                   tx.chapter.update({
                      where: { id },

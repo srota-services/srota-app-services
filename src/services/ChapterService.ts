@@ -33,6 +33,7 @@ import { SubscriptionAccessDto } from '../models/SubscriptionAccessDto';
 import { runWrite } from '../utils/prismaTransaction';
 import { rethrowServiceError, logServiceError } from '../utils/serviceError';
 import { MessageHandler } from '../utils/MessageHandler';
+import { ChapterTranscodingCompletedMessage } from '../types/chapter-events';
 
 export class ChapterService {
    private fileUploadService: FileUploadService;
@@ -244,13 +245,12 @@ export class ChapterService {
             fileSize: BigInt(hasAudioUpload ? 0 : fileSize),
             coverImage,
             sourceUploadStatus: hasAudioUpload ? 'pending' : (filePath ? 'ready' : 'pending'),
+            isActive: false,
+            transcodingReady: false,
          };
 
          if (chapterData.scheduledAt !== undefined) {
             createData.scheduledAt = chapterData.scheduledAt;
-            createData.isActive = false;
-         } else {
-            createData.isActive = chapterData.isActive ?? true; // Default to true if not provided
          }
 
          let chapter = await runWrite(this.prisma, async (tx) =>
@@ -420,6 +420,8 @@ export class ChapterService {
          if (hasAudioUpload) {
             updatePayload.sourceUploadStatus = 'pending';
             updatePayload.sourceUploadError = null;
+            updatePayload.isActive = false;
+            updatePayload.transcodingReady = false;
          }
 
          // Handle scheduledAt: if provided, set isActive=false
@@ -824,6 +826,47 @@ export class ChapterService {
       }
    }
 
+   /**
+    * Activate a chapter after all transcoding bitrates complete (RabbitMQ event from streaming-service).
+    */
+   async handleTranscodingCompleted(message: ChapterTranscodingCompletedMessage): Promise<void> {
+      const chapter = await this.prisma.chapter.findUnique({
+         where: { id: message.chapterId },
+         select: {
+            id: true,
+            audiobookId: true,
+            isActive: true,
+            transcodingReady: true,
+            scheduledAt: true,
+         },
+      });
+
+      if (!chapter) {
+         return;
+      }
+
+      if (chapter.transcodingReady && chapter.isActive) {
+         return;
+      }
+
+      const now = new Date();
+      const shouldActivate = chapter.scheduledAt === null || chapter.scheduledAt <= now;
+
+      await runWrite(this.prisma, async (tx) =>
+         tx.chapter.update({
+            where: { id: chapter.id },
+            data: {
+               transcodingReady: true,
+               ...(shouldActivate
+                  ? { isActive: true, scheduledAt: null }
+                  : {}),
+            },
+         }),
+      );
+
+      emitCacheInvalidation('chapter', 'updated', chapter.id, { audiobookId: chapter.audiobookId });
+   }
+
    private async publishChapterTranscodingJob(
       chapter: {
          id: string;
@@ -883,6 +926,7 @@ export class ChapterService {
       endPosition: number;
       minSubscriptionTier?: SubscriptionTierLevel | null;
       isActive: boolean;
+      transcodingReady?: boolean;
       sourceUploadStatus?: 'pending' | 'ready' | 'failed';
       sourceUploadError?: string | null;
       scheduledAt: Date | null;
@@ -907,6 +951,7 @@ export class ChapterService {
          endPosition: chapter.endPosition,
          minSubscriptionTier: chapter.minSubscriptionTier ?? null,
          isActive: chapter.isActive,
+         transcodingReady: chapter.transcodingReady ?? false,
          sourceUploadStatus: chapter.sourceUploadStatus ?? 'ready',
          ...(chapter.sourceUploadError ? { sourceUploadError: chapter.sourceUploadError } : {}),
          scheduledAt: chapter.scheduledAt ?? null,

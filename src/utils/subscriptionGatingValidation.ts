@@ -45,13 +45,17 @@ export function parseSubscriptionGatingMode(
 }
 
 export function validateMinSubscriptionTierValue(
-   value: SubscriptionTierLevel | string | null | undefined,
+   value: SubscriptionTierLevel | string | number | null | undefined,
 ): SubscriptionTierLevel | null {
    if (isFreeTierInput(value)) {
       return null;
    }
-   if (ALL_TIER_LEVELS.includes(value as SubscriptionTierLevel)) {
-      return value as SubscriptionTierLevel;
+   const str = String(value).trim();
+   if (str in TIER_NUMERIC_ALIAS) {
+      return TIER_NUMERIC_ALIAS[str]!;
+   }
+   if (ALL_TIER_LEVELS.includes(str as SubscriptionTierLevel)) {
+      return str as SubscriptionTierLevel;
    }
    throw ApiError.validationError(
       MessageHandler.getErrorMessage('validation.min_subscription_tier_invalid'),
