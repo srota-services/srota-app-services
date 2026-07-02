@@ -329,7 +329,8 @@ export class ChapterController {
     *                 description: Audio file (required, max 1GB)
     *               minSubscriptionTier:
     *                 type: integer
-    *                 description: Minimum subscription tier when audiobook uses CHAPTER gating mode
+    *                 nullable: true
+    *                 description: When the audiobook uses CHAPTER gating, chapter 1 must be null (free). Later chapters require a tier.
     *           examples:
     *             example1:
     *               summary: Example chapter with audio file

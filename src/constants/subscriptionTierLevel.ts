@@ -21,12 +21,22 @@ export const MAX_CHAPTER_TIER_INCREASES = 2;
 /** All valid SubscriptionTierLevel values. */
 export const ALL_TIER_LEVELS = Object.values(SubscriptionTierLevel) as SubscriptionTierLevel[];
 
-/** Numeric string aliases accepted from form inputs ("1" → BASE, etc.). */
-export const TIER_NUMERIC_ALIAS: Record<string, SubscriptionTierLevel> = {
+/** Numeric string aliases accepted from form inputs ("0" → free, "1" → BASE, etc.). */
+export const TIER_NUMERIC_ALIAS: Record<string, SubscriptionTierLevel | null> = {
+   '0': null,
    '1': SubscriptionTierLevel.BASE,
    '2': SubscriptionTierLevel.STANDARD,
    '3': SubscriptionTierLevel.PREMIUM,
 };
+
+/** True when form/API input represents free / no subscription tier. */
+export function isFreeTierInput(value: unknown): boolean {
+   if (value === null || value === undefined) {
+      return true;
+   }
+   const str = String(value).trim();
+   return str === '' || str === 'null' || str === '0';
+}
 
 export interface ChapterTierRow {
    id?: string;
