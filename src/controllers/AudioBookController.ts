@@ -87,6 +87,7 @@ export class AudioBookController {
       search: req.query['search'] as string,
       active: req.query['active'] !== undefined ? req.query['active'] === 'true' : undefined,
       scheduled: req.query['scheduled'] !== undefined ? req.query['scheduled'] === 'true' : undefined,
+      type: req.query['type'] as AudioBookQueryParams['type'],
     });
 
     const { audiobooks, totalCount } = await this.audioBookService.getAllAudioBooks(
@@ -120,16 +121,18 @@ export class AudioBookController {
     }
 
     const subscriptionAccess =
-      await this.audioBookService.getSubscriptionAccessForAudiobook(
-        audiobook.id,
-        {
-          subscriptionGatingMode: audiobook.subscriptionGatingMode as SubscriptionGatingMode,
-          minSubscriptionTier: audiobook.minSubscriptionTier ?? null,
-        },
-        externalUserId,
-        accessToken,
-        authReq.user?.role ?? null,
-      );
+      audiobook.type === 'PUBLICATION'
+        ? await this.audioBookService.getSubscriptionAccessForAudiobook(
+          audiobook.id,
+          {
+            subscriptionGatingMode: audiobook.subscriptionGatingMode as SubscriptionGatingMode,
+            minSubscriptionTier: audiobook.minSubscriptionTier ?? null,
+          },
+          externalUserId,
+          accessToken,
+          authReq.user?.role ?? null,
+        )
+        : undefined;
 
     const rating = await this.audioBookService.getUserReviewRatingForAudiobook(
       audiobook.id,

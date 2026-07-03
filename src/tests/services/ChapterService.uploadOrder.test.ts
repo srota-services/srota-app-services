@@ -289,7 +289,10 @@ describe('ChapterService.updateChapter re-transcode', () => {
             }),
          },
          chapter: {
-            findUnique: jest.fn().mockResolvedValue(existingChapter),
+            findUnique: jest.fn().mockResolvedValue({
+               ...existingChapter,
+               audiobook: { type: 'PUBLICATION' },
+            }),
             findFirst: jest.fn().mockResolvedValue(null),
             update: jest
                .fn()

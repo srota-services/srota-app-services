@@ -25,6 +25,7 @@ describe('AudioBookOwnerService', () => {
       id: 'book-1',
       title: 'Title',
       author: 'Author',
+      type: 'PUBLICATION',
       languageId: 'lang-en',
       isActive: true,
       isPublic: true,
@@ -33,7 +34,7 @@ describe('AudioBookOwnerService', () => {
       updatedAt: new Date(),
       owner: { type: 'ORGANIZATION', id: 'org-1' },
       ...overrides,
-   });
+   } as AudioBookDto);
 
    beforeEach(() => {
       jest.clearAllMocks();

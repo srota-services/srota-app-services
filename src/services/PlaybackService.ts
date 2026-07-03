@@ -188,7 +188,7 @@ export class PlaybackService {
                where: { id: currentSession.currentChapterId },
             });
 
-            if (chapter && position > chapter.duration) {
+            if (chapter && chapter.duration != null && position > chapter.duration) {
                throw new ApiError('Position cannot exceed chapter duration', 400);
             }
          }

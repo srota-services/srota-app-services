@@ -44,6 +44,12 @@ enum AudioBookOwnerType {
   ORGANIZATION
 }
 
+/// STI discriminator — PublicationAudiobook vs AuthoringAudiobook share the audiobooks table.
+enum AudiobookType {
+  PUBLICATION
+  AUTHORING
+}
+
 // AudioBook model for storing book information
 model AudioBook {
   id          String  @id @default(cuid())
@@ -51,6 +57,9 @@ model AudioBook {
   author      String
   narrator    String?
   description String?
+
+  /// STI discriminator (PublicationAudiobook | AuthoringAudiobook)
+  type AudiobookType @default(PUBLICATION)
 
   // Media information
   duration   Int? // Duration in seconds (calculated from chapters)
@@ -106,6 +115,7 @@ model AudioBook {
   @@index([ownerType, ownerId])
   @@index([moodId])
   @@index([languageId])
+  @@index([type])
   @@map("audiobooks")
 }
 
@@ -353,14 +363,14 @@ model Chapter {
 
   // Chapter metadata
   chapterNumber Int // Order of chapter in audiobook
-  duration      Int // Duration in seconds
-  filePath      String // Path to chapter audio file
-  fileSize      BigInt // File size in bytes
+  duration      Int? // Duration in seconds (publication chapters)
+  filePath      String? // Path to chapter audio file (publication chapters)
+  fileSize      BigInt? // File size in bytes (publication chapters)
   coverImage    String // URL to chapter cover image (required)
 
-  // Chapter start/end positions in main audiobook file
-  startPosition Int // Start position in seconds within main audiobook
-  endPosition   Int // End position in seconds within main audiobook
+  // Chapter start/end positions in main audiobook file (publication chapters)
+  startPosition Int?
+  endPosition   Int?
 
   // Subscription gating when parent audiobook subscriptionGatingMode is CHAPTER.
   // All chapters in an audiobook must share the same minSubscriptionTier.
@@ -382,8 +392,27 @@ model Chapter {
   chapterProgress ChapterProgress[]
   bookmarks       Bookmark[]
   notes           Note[]
+  pages           Page[]
 
   @@map("chapters")
+}
+
+// Authoring-mode page content (one page of a chapter manuscript)
+model Page {
+  id         String @id @default(cuid())
+  chapterId  String
+  pageNumber Int
+  plainText  String @db.Text
+  richText   Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  chapter Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  @@unique([chapterId, pageNumber])
+  @@index([chapterId])
+  @@map("pages")
 }
 
 // Chapter progress tracking for individual users

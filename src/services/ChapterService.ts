@@ -2,7 +2,7 @@
  * Chapter Service
  * Handles business logic for chapter management
  */
-import { PrismaClient, SubscriptionGatingMode, SubscriptionTierLevel } from '@prisma/client';
+import { PrismaClient, SubscriptionGatingMode, SubscriptionTierLevel, AudiobookType, Page as PrismaPage } from '@prisma/client';
 import {
    ChapterData,
    ChapterWithRelations,
@@ -34,6 +34,14 @@ import { runWrite } from '../utils/prismaTransaction';
 import { rethrowServiceError, logServiceError } from '../utils/serviceError';
 import { MessageHandler } from '../utils/MessageHandler';
 import { ChapterTranscodingCompletedMessage } from '../types/chapter-events';
+import {
+   assertAuthoringChapterRequiresPages,
+   assertAuthoringChapterTierForbidden,
+   assertPublicationChapterRequiresAudio,
+   validatePageInputs,
+} from '../utils/audiobookTypeValidation';
+import { toPageDto } from '../models/PageDto';
+import { runInTransaction } from '../utils/prismaTransaction';
 
 export class ChapterService {
    private fileUploadService: FileUploadService;
@@ -122,6 +130,9 @@ export class ChapterService {
                         author: true,
                      },
                   },
+                  pages: {
+                     orderBy: { pageNumber: 'asc' },
+                  },
                   chapterProgress: true,
                   bookmarks: true,
                   notes: true,
@@ -164,6 +175,9 @@ export class ChapterService {
                      author: true,
                   },
                },
+               pages: {
+                  orderBy: { pageNumber: 'asc' },
+               },
                chapterProgress: true,
                bookmarks: true,
                notes: true,
@@ -192,7 +206,6 @@ export class ChapterService {
       uploadedCoverImage?: Express.Multer.File
    ): Promise<ChapterData> {
       try {
-         // Validate audiobook exists
          const audiobook = await this.prisma.audioBook.findUnique({
             where: { id: chapterData.audiobookId },
          });
@@ -201,152 +214,284 @@ export class ChapterService {
             throw new ApiError('Audiobook not found', 404);
          }
 
-         const chapterTier = await resolveChapterTierForCreate(
-            this.prisma,
-            chapterData.audiobookId,
-            chapterData.chapterNumber,
-            chapterData.minSubscriptionTier,
-         );
-
-         // Check if chapter number already exists for this audiobook
-         const existingChapter = await this.prisma.chapter.findFirst({
-            where: {
-               audiobookId: chapterData.audiobookId,
-               chapterNumber: chapterData.chapterNumber,
-            },
-         });
-
-         if (existingChapter) {
-            throw new ApiError('Chapter number already exists for this audiobook', 400);
+         if (audiobook.type === AudiobookType.AUTHORING) {
+            return this.createAuthoringChapter(chapterData, uploadedCoverImage);
          }
 
-         // Defer audio upload until after DB commit when a new file is attached
-         const filePath = chapterData.filePath || '';
-         const fileSize = chapterData.fileSize || 0;
-         const hasAudioUpload = Boolean(uploadedFile);
-
-         // Handle coverImage - required via upload or chapterData
-         let coverImage = chapterData.coverImage;
-         let coverImagePath: string | undefined;
-
-         if (uploadedCoverImage) {
-            coverImagePath = uploadedCoverImage.path;
-            coverImage = coverImage ?? 'pending';
-         }
-
-         if (!coverImage) {
-            throw new ApiError('Cover image is required', 400);
-         }
-
-         const createData: any = {
-            ...chapterData,
-            minSubscriptionTier: chapterTier,
-            filePath: hasAudioUpload ? '' : filePath,
-            fileSize: BigInt(hasAudioUpload ? 0 : fileSize),
-            coverImage,
-            sourceUploadStatus: hasAudioUpload ? 'pending' : (filePath ? 'ready' : 'pending'),
-            isActive: false,
-            transcodingReady: false,
-         };
-
-         if (chapterData.scheduledAt !== undefined) {
-            createData.scheduledAt = chapterData.scheduledAt;
-         }
-
-         let chapter = await runWrite(this.prisma, async (tx) =>
-            tx.chapter.create({
-               data: createData,
-            }),
-         );
-
-         if (coverImagePath) {
-            try {
-               const { primaryStorageKey } = await this.imageAssetService.generateAndStoreVariants(
-                  'chapter',
-                  chapter.id,
-                  coverImagePath,
-               );
-               chapter = await runWrite(this.prisma, async (tx) =>
-                  tx.chapter.update({
-                     where: { id: chapter.id },
-                     data: { coverImage: primaryStorageKey },
-                  }),
-               );
-            } catch (variantError: unknown) {
-               await runWrite(this.prisma, async (tx) => tx.chapter.delete({ where: { id: chapter.id } }));
-               const message = variantError instanceof Error ? variantError.message : 'Invalid chapter cover image';
-               throw new ApiError(message, 400);
-            }
-         }
-
-         if (hasAudioUpload && uploadedFile) {
-            try {
-               const uploadResult = await this.fileUploadService.uploadFile(
-                  uploadedFile,
-                  '/uploads/chapters'
-               );
-               chapter = await runWrite(this.prisma, async (tx) =>
-                  tx.chapter.update({
-                     where: { id: chapter.id },
-                     data: {
-                        filePath: uploadResult.filePath,
-                        fileSize: BigInt(uploadResult.fileSize),
-                        sourceUploadStatus: 'ready',
-                        sourceUploadError: null,
-                     },
-                  }),
-               );
-            } catch (uploadError: unknown) {
-               const message = uploadError instanceof Error ? uploadError.message : 'Upload failed';
-               await runWrite(this.prisma, async (tx) =>
-                  tx.chapter.update({
-                     where: { id: chapter.id },
-                     data: {
-                        sourceUploadStatus: 'failed',
-                        sourceUploadError: message,
-                     },
-                  }),
-               );
-               throw new ApiError(`Failed to upload chapter audio: ${message}`, 500);
-            }
-         }
-
-         if (chapter.sourceUploadStatus === 'ready' && chapter.filePath) {
-            await this.publishChapterTranscodingJob(chapter);
-         }
-
-         // Schedule audiobook duration calculation job
-         if (this.backgroundJobService) {
-            try {
-               await this.backgroundJobService.scheduleAudiobookDurationCalculation(chapter.audiobookId);
-            } catch (error) {
-               logServiceError(error, { operation: 'createChapter.scheduleDuration' });
-            }
-
-            if (chapterData.scheduledAt !== undefined) {
-               try {
-                  await this.backgroundJobService.scheduleActivationJob('chapter', chapter.id, chapterData.scheduledAt);
-               } catch (error) {
-                  logServiceError(error, { operation: 'createChapter.scheduleActivation' });
-               }
-            }
-         }
-
-         emitCacheInvalidation('chapter', 'created', chapter.id, { audiobookId: chapterData.audiobookId });
-         if (chapterTier !== null) {
-            emitChapterSubscriptionTierInvalidation({
-               action: 'created',
-               chapterId: chapter.id,
-               audiobookId: chapterData.audiobookId,
-            });
-         }
-         return fileUrlService.resolveChapterMedia(this.mapChapterData(chapter));
+         return this.createPublicationChapter(chapterData, uploadedFile, uploadedCoverImage);
       } catch (error) {
          if (error instanceof ApiError) {
             throw error;
          }
          throw new ApiError('Failed to create chapter', 500);
       }
+   }
+
+   private async createAuthoringChapter(
+      chapterData: CreateChapterRequest,
+      uploadedCoverImage?: Express.Multer.File,
+   ): Promise<ChapterData> {
+      assertAuthoringChapterTierForbidden(chapterData.minSubscriptionTier);
+      assertAuthoringChapterRequiresPages(chapterData.pages);
+      validatePageInputs(chapterData.pages!);
+
+      const existingChapter = await this.prisma.chapter.findFirst({
+         where: {
+            audiobookId: chapterData.audiobookId,
+            chapterNumber: chapterData.chapterNumber,
+         },
+      });
+
+      if (existingChapter) {
+         throw new ApiError('Chapter number already exists for this audiobook', 400);
+      }
+
+      let coverImage = chapterData.coverImage;
+      let coverImagePath: string | undefined;
+
+      if (uploadedCoverImage) {
+         coverImagePath = uploadedCoverImage.path;
+         coverImage = coverImage ?? 'pending';
+      }
+
+      if (!coverImage) {
+         throw new ApiError('Cover image is required', 400);
+      }
+
+      const isScheduled = chapterData.scheduledAt !== undefined;
+
+      let chapter = await runInTransaction(this.prisma, async (tx) => {
+         const created = await tx.chapter.create({
+            data: {
+               audiobookId: chapterData.audiobookId,
+               title: chapterData.title,
+               description: chapterData.description ?? null,
+               chapterNumber: chapterData.chapterNumber,
+               coverImage,
+               minSubscriptionTier: null,
+               duration: null,
+               filePath: null,
+               fileSize: null,
+               startPosition: null,
+               endPosition: null,
+               sourceUploadStatus: 'ready',
+               transcodingReady: true,
+               isActive: !isScheduled,
+               ...(isScheduled ? { scheduledAt: chapterData.scheduledAt } : {}),
+            },
+         });
+
+         await tx.page.createMany({
+            data: chapterData.pages!.map((page) => ({
+               chapterId: created.id,
+               pageNumber: page.pageNumber,
+               plainText: page.plainText.trim(),
+               richText: page.richText as object,
+            })),
+         });
+
+         return created;
+      });
+
+      if (coverImagePath) {
+         try {
+            const { primaryStorageKey } = await this.imageAssetService.generateAndStoreVariants(
+               'chapter',
+               chapter.id,
+               coverImagePath,
+            );
+            chapter = await runWrite(this.prisma, async (tx) =>
+               tx.chapter.update({
+                  where: { id: chapter.id },
+                  data: { coverImage: primaryStorageKey },
+               }),
+            );
+         } catch (variantError: unknown) {
+            await runWrite(this.prisma, async (tx) => tx.chapter.delete({ where: { id: chapter.id } }));
+            const message = variantError instanceof Error ? variantError.message : 'Invalid chapter cover image';
+            throw new ApiError(message, 400);
+         }
+      }
+
+      if (isScheduled && this.backgroundJobService) {
+         try {
+            await this.backgroundJobService.scheduleActivationJob('chapter', chapter.id, chapterData.scheduledAt!);
+         } catch (error) {
+            logServiceError(error, { operation: 'createAuthoringChapter.scheduleActivation' });
+         }
+      }
+
+      emitCacheInvalidation('chapter', 'created', chapter.id, { audiobookId: chapterData.audiobookId });
+
+      const chapterWithPages = await this.prisma.chapter.findUnique({
+         where: { id: chapter.id },
+         include: { pages: { orderBy: { pageNumber: 'asc' } } },
+      });
+
+      return fileUrlService.resolveChapterMedia(this.mapChapterRecord(chapterWithPages!));
+   }
+
+   private async createPublicationChapter(
+      chapterData: CreateChapterRequest,
+      uploadedFile?: Express.Multer.File,
+      uploadedCoverImage?: Express.Multer.File,
+   ): Promise<ChapterData> {
+      assertPublicationChapterRequiresAudio(Boolean(uploadedFile || chapterData.filePath));
+
+      const chapterTier = await resolveChapterTierForCreate(
+         this.prisma,
+         chapterData.audiobookId,
+         chapterData.chapterNumber,
+         chapterData.minSubscriptionTier,
+      );
+
+      if (
+         chapterData.duration === undefined ||
+         chapterData.startPosition === undefined ||
+         chapterData.endPosition === undefined
+      ) {
+         throw new ApiError('Duration, start position, and end position are required for publication chapters', 400);
+      }
+
+      // Check if chapter number already exists for this audiobook
+      const existingChapter = await this.prisma.chapter.findFirst({
+         where: {
+            audiobookId: chapterData.audiobookId,
+            chapterNumber: chapterData.chapterNumber,
+         },
+      });
+
+      if (existingChapter) {
+         throw new ApiError('Chapter number already exists for this audiobook', 400);
+      }
+
+      // Defer audio upload until after DB commit when a new file is attached
+      const filePath = chapterData.filePath || '';
+      const fileSize = chapterData.fileSize || 0;
+      const hasAudioUpload = Boolean(uploadedFile);
+
+      // Handle coverImage - required via upload or chapterData
+      let coverImage = chapterData.coverImage;
+      let coverImagePath: string | undefined;
+
+      if (uploadedCoverImage) {
+         coverImagePath = uploadedCoverImage.path;
+         coverImage = coverImage ?? 'pending';
+      }
+
+      if (!coverImage) {
+         throw new ApiError('Cover image is required', 400);
+      }
+
+      const createData: any = {
+         audiobookId: chapterData.audiobookId,
+         title: chapterData.title,
+         description: chapterData.description,
+         chapterNumber: chapterData.chapterNumber,
+         duration: chapterData.duration,
+         startPosition: chapterData.startPosition,
+         endPosition: chapterData.endPosition,
+         minSubscriptionTier: chapterTier,
+         filePath: hasAudioUpload ? '' : filePath,
+         fileSize: BigInt(hasAudioUpload ? 0 : fileSize),
+         coverImage,
+         sourceUploadStatus: hasAudioUpload ? 'pending' : (filePath ? 'ready' : 'pending'),
+         isActive: false,
+         transcodingReady: false,
+      };
+
+      if (chapterData.scheduledAt !== undefined) {
+         createData.scheduledAt = chapterData.scheduledAt;
+      }
+
+      let chapter = await runWrite(this.prisma, async (tx) =>
+         tx.chapter.create({
+            data: createData,
+         }),
+      );
+
+      if (coverImagePath) {
+         try {
+            const { primaryStorageKey } = await this.imageAssetService.generateAndStoreVariants(
+               'chapter',
+               chapter.id,
+               coverImagePath,
+            );
+            chapter = await runWrite(this.prisma, async (tx) =>
+               tx.chapter.update({
+                  where: { id: chapter.id },
+                  data: { coverImage: primaryStorageKey },
+               }),
+            );
+         } catch (variantError: unknown) {
+            await runWrite(this.prisma, async (tx) => tx.chapter.delete({ where: { id: chapter.id } }));
+            const message = variantError instanceof Error ? variantError.message : 'Invalid chapter cover image';
+            throw new ApiError(message, 400);
+         }
+      }
+
+      if (hasAudioUpload && uploadedFile) {
+         try {
+            const uploadResult = await this.fileUploadService.uploadFile(
+               uploadedFile,
+               '/uploads/chapters'
+            );
+            chapter = await runWrite(this.prisma, async (tx) =>
+               tx.chapter.update({
+                  where: { id: chapter.id },
+                  data: {
+                     filePath: uploadResult.filePath,
+                     fileSize: BigInt(uploadResult.fileSize),
+                     sourceUploadStatus: 'ready',
+                     sourceUploadError: null,
+                  },
+               }),
+            );
+         } catch (uploadError: unknown) {
+            const message = uploadError instanceof Error ? uploadError.message : 'Upload failed';
+            await runWrite(this.prisma, async (tx) =>
+               tx.chapter.update({
+                  where: { id: chapter.id },
+                  data: {
+                     sourceUploadStatus: 'failed',
+                     sourceUploadError: message,
+                  },
+               }),
+            );
+            throw new ApiError(`Failed to upload chapter audio: ${message}`, 500);
+         }
+      }
+
+      if (chapter.sourceUploadStatus === 'ready' && chapter.filePath) {
+         await this.publishChapterTranscodingJob(chapter);
+      }
+
+      // Schedule audiobook duration calculation job
+      if (this.backgroundJobService) {
+         try {
+            await this.backgroundJobService.scheduleAudiobookDurationCalculation(chapter.audiobookId);
+         } catch (error) {
+            logServiceError(error, { operation: 'createChapter.scheduleDuration' });
+         }
+
+         if (chapterData.scheduledAt !== undefined) {
+            try {
+               await this.backgroundJobService.scheduleActivationJob('chapter', chapter.id, chapterData.scheduledAt);
+            } catch (error) {
+               logServiceError(error, { operation: 'createChapter.scheduleActivation' });
+            }
+         }
+      }
+
+      emitCacheInvalidation('chapter', 'created', chapter.id, { audiobookId: chapterData.audiobookId });
+      if (chapterTier !== null) {
+         emitChapterSubscriptionTierInvalidation({
+            action: 'created',
+            chapterId: chapter.id,
+            audiobookId: chapterData.audiobookId,
+         });
+      }
+      return fileUrlService.resolveChapterMedia(this.mapChapterData(chapter));
    }
 
    /**
@@ -361,10 +506,33 @@ export class ChapterService {
       try {
          const existingChapter = await this.prisma.chapter.findUnique({
             where: { id: chapterId },
+            include: {
+               audiobook: {
+                  select: { type: true },
+               },
+            },
          });
 
          if (!existingChapter) {
             throw new ApiError('Chapter not found', 404);
+         }
+
+         const isAuthoring = existingChapter.audiobook.type === AudiobookType.AUTHORING;
+
+         if (isAuthoring) {
+            assertAuthoringChapterTierForbidden(updateData.minSubscriptionTier);
+            if (uploadedFile) {
+               throw new ApiError('Audio upload is not allowed for authoring chapters', 400);
+            }
+            if (
+               updateData.duration !== undefined ||
+               updateData.startPosition !== undefined ||
+               updateData.endPosition !== undefined ||
+               updateData.filePath !== undefined ||
+               updateData.fileSize !== undefined
+            ) {
+               throw new ApiError('Audio fields cannot be updated on authoring chapters', 400);
+            }
          }
 
          // Validate: Cannot schedule an active chapter
@@ -436,25 +604,30 @@ export class ChapterService {
          if (updateData.chapterNumber !== undefined) {
             tierUpdateInput.chapterNumber = updateData.chapterNumber;
          }
-         if (updateData.minSubscriptionTier !== undefined) {
+         if (!isAuthoring && updateData.minSubscriptionTier !== undefined) {
             tierUpdateInput.minSubscriptionTier = updateData.minSubscriptionTier;
          }
 
-         const resolvedGating = await resolveChapterTierForUpdate(
-            this.prisma,
-            existingChapter.audiobookId,
-            chapterId,
-            {
-               chapterNumber: existingChapter.chapterNumber,
-               minSubscriptionTier: existingChapter.minSubscriptionTier,
-            },
-            tierUpdateInput,
-         );
-         if (resolvedGating.minSubscriptionTier !== undefined) {
-            updatePayload.minSubscriptionTier = resolvedGating.minSubscriptionTier;
-         }
-         if (resolvedGating.chapterNumber !== undefined) {
-            updatePayload.chapterNumber = resolvedGating.chapterNumber;
+         let resolvedGating: Awaited<ReturnType<typeof resolveChapterTierForUpdate>> = {};
+         if (!isAuthoring) {
+            resolvedGating = await resolveChapterTierForUpdate(
+               this.prisma,
+               existingChapter.audiobookId,
+               chapterId,
+               {
+                  chapterNumber: existingChapter.chapterNumber,
+                  minSubscriptionTier: existingChapter.minSubscriptionTier,
+               },
+               tierUpdateInput,
+            );
+            if (resolvedGating.minSubscriptionTier !== undefined) {
+               updatePayload.minSubscriptionTier = resolvedGating.minSubscriptionTier;
+            }
+            if (resolvedGating.chapterNumber !== undefined) {
+               updatePayload.chapterNumber = resolvedGating.chapterNumber;
+            }
+         } else if (updateData.chapterNumber !== undefined) {
+            updatePayload.chapterNumber = updateData.chapterNumber;
          }
 
          let chapter = await runWrite(this.prisma, async (tx) =>
@@ -464,7 +637,7 @@ export class ChapterService {
             }),
          );
 
-         if (hasAudioUpload && uploadedFile) {
+         if (!isAuthoring && hasAudioUpload && uploadedFile) {
             try {
                const uploadResult = await this.fileUploadService.uploadFile(
                   uploadedFile,
@@ -538,6 +711,7 @@ export class ChapterService {
 
          emitCacheInvalidation('chapter', 'updated', chapterId, { audiobookId: existingChapter.audiobookId });
          if (
+            !isAuthoring &&
             resolvedGating.minSubscriptionTier !== undefined &&
             resolvedGating.minSubscriptionTier !== existingChapter.minSubscriptionTier
          ) {
@@ -657,7 +831,7 @@ export class ChapterService {
          }
 
          // Validate position is within chapter duration
-         if (progressData.currentPosition > chapter.duration) {
+         if (chapter.duration != null && progressData.currentPosition > chapter.duration) {
             throw new ApiError('Position cannot exceed chapter duration', 400);
          }
 
@@ -701,7 +875,7 @@ export class ChapterService {
          const chapter = await this.getChapterById(chapterId);
          const userProgress = await this.getChapterProgress(userProfileId, chapterId);
 
-         const overallProgress = userProgress
+         const overallProgress = userProgress && chapter.duration
             ? (userProgress.currentPosition / chapter.duration) * 100
             : 0;
 
@@ -766,7 +940,7 @@ export class ChapterService {
          const chaptersWithProgress = await Promise.all(
             chapters.map(async (chapter) => {
                const userProgress = await this.getChapterProgress(userProfileId, chapter.id);
-               const overallProgress = userProgress
+               const overallProgress = userProgress && chapter.duration
                   ? (userProgress.currentPosition / chapter.duration) * 100
                   : 0;
 
@@ -874,16 +1048,26 @@ export class ChapterService {
          title: string;
          description: string | null;
          chapterNumber: number;
-         duration: number;
-         filePath: string;
-         fileSize: bigint;
-         startPosition: number;
-         endPosition: number;
+         duration: number | null;
+         filePath: string | null;
+         fileSize: bigint | null;
+         startPosition: number | null;
+         endPosition: number | null;
          createdAt: Date;
          updatedAt: Date;
       },
       options?: { forceRetranscode?: boolean }
    ): Promise<void> {
+      if (
+         !chapter.filePath ||
+         chapter.duration == null ||
+         chapter.startPosition == null ||
+         chapter.endPosition == null ||
+         chapter.fileSize == null
+      ) {
+         return;
+      }
+
       try {
          const jobData: TranscodingJobData = {
             chapter: {
@@ -918,12 +1102,12 @@ export class ChapterService {
       title: string;
       description: string | null;
       chapterNumber: number;
-      duration: number;
-      filePath: string;
-      fileSize: bigint;
+      duration: number | null;
+      filePath: string | null;
+      fileSize: bigint | null;
       coverImage: string;
-      startPosition: number;
-      endPosition: number;
+      startPosition: number | null;
+      endPosition: number | null;
       minSubscriptionTier?: SubscriptionTierLevel | null;
       isActive: boolean;
       transcodingReady?: boolean;
@@ -936,6 +1120,15 @@ export class ChapterService {
       chapterProgress?: unknown[];
       bookmarks?: unknown[];
       notes?: unknown[];
+      pages?: Array<{
+         id: string;
+         chapterId: string;
+         pageNumber: number;
+         plainText: string;
+         richText: unknown;
+         createdAt: Date;
+         updatedAt: Date;
+      }>;
    }): ChapterWithRelations {
       return {
          id: chapter.id,
@@ -943,12 +1136,12 @@ export class ChapterService {
          title: chapter.title,
          description: chapter.description || undefined,
          chapterNumber: chapter.chapterNumber,
-         duration: chapter.duration,
-         filePath: chapter.filePath,
-         fileSize: Number(chapter.fileSize),
+         duration: chapter.duration ?? null,
+         filePath: chapter.filePath ?? null,
+         fileSize: chapter.fileSize !== null && chapter.fileSize !== undefined ? Number(chapter.fileSize) : null,
          coverImage: chapter.coverImage,
-         startPosition: chapter.startPosition,
-         endPosition: chapter.endPosition,
+         startPosition: chapter.startPosition ?? null,
+         endPosition: chapter.endPosition ?? null,
          minSubscriptionTier: chapter.minSubscriptionTier ?? null,
          isActive: chapter.isActive,
          transcodingReady: chapter.transcodingReady ?? false,
@@ -957,6 +1150,9 @@ export class ChapterService {
          scheduledAt: chapter.scheduledAt ?? null,
          createdAt: chapter.createdAt,
          updatedAt: chapter.updatedAt,
+         ...(chapter.pages && chapter.pages.length > 0 && {
+            pages: chapter.pages.map((page) => toPageDto(page as PrismaPage)),
+         }),
          ...(chapter.audiobook && { audiobook: chapter.audiobook }),
          ...(chapter.bookmarks && { bookmarks: chapter.bookmarks as ChapterWithRelations['bookmarks'] }),
          ...(chapter.notes && { notes: chapter.notes as ChapterWithRelations['notes'] }),
@@ -972,12 +1168,12 @@ export class ChapterService {
       title: string;
       description: string | null;
       chapterNumber: number;
-      duration: number;
-      filePath: string;
-      fileSize: bigint;
+      duration: number | null;
+      filePath: string | null;
+      fileSize: bigint | null;
       coverImage: string;
-      startPosition: number;
-      endPosition: number;
+      startPosition: number | null;
+      endPosition: number | null;
       isActive: boolean;
       sourceUploadStatus?: 'pending' | 'ready' | 'failed';
       sourceUploadError?: string | null;

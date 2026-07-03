@@ -32,6 +32,9 @@ describe('ChapterController.createChapter', () => {
          userProfile: {
             findUnique: jest.fn().mockResolvedValue({ id: 'profile-1' }),
          },
+         audioBook: {
+            findUnique: jest.fn().mockResolvedValue({ type: 'PUBLICATION' }),
+         },
       } as unknown as PrismaClient;
 
       mockReq = {

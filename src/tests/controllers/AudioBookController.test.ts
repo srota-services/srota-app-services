@@ -187,6 +187,7 @@ describe('AudioBookController', () => {
          const mockBook = {
             id: 'book-123',
             title: 'Test Book',
+            type: 'PUBLICATION',
             subscriptionGatingMode: 'NONE',
             minSubscriptionTier: null,
          };

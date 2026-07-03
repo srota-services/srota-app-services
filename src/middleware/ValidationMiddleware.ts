@@ -200,16 +200,17 @@ export class ValidationMiddleware {
    * Validate MongoDB ObjectId format (if using MongoDB) or CUID format
    */
   static validateId(req: Request, res: Response, next: NextFunction): void {
-    const { id, audiobookId } = req.params;
+    const { id, audiobookId, chapterId } = req.params;
 
-    if (!id && !audiobookId) {
+    if (!id && !audiobookId && !chapterId) {
       ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.id_required'));
       return;
     }
 
     // CUID format validation (used by Prisma)
     const cuidRegex = /^c[a-z0-9]{24}$/;
-    if (!cuidRegex.test(id!) && !cuidRegex.test(audiobookId!)) {
+    const candidate = id ?? audiobookId ?? chapterId;
+    if (!candidate || !cuidRegex.test(candidate)) {
       ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.id_format'));
       return;
     }
@@ -400,9 +401,8 @@ export class ValidationMiddleware {
    * Validate chapter creation request
    */
   static validateChapterCreation(req: Request, res: Response, next: NextFunction): void {
-    const { audiobookId, title, chapterNumber, duration, startPosition, endPosition } = req.body;
+    const { audiobookId, title, chapterNumber } = req.body;
 
-    // Validate required fields
     if (!audiobookId) {
       ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.audiobook_id_required'));
       return;
@@ -418,35 +418,12 @@ export class ValidationMiddleware {
       return;
     }
 
-    // Parse and validate numeric fields (they come as strings from form-data)
     const chapterNumberNum = parseInt(chapterNumber, 10);
     if (!chapterNumber || isNaN(chapterNumberNum) || chapterNumberNum < 1) {
       ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.chapter_number_positive'));
       return;
     }
 
-    const durationNum = parseInt(duration, 10);
-    if (!duration || isNaN(durationNum) || durationNum < 1) {
-      ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.duration_positive'));
-      return;
-    }
-
-    const startPositionNum = parseInt(startPosition, 10);
-    if (!startPosition || isNaN(startPositionNum) || startPositionNum < 0) {
-      ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.start_position_non_negative'));
-      return;
-    }
-
-    const endPositionNum = parseInt(endPosition, 10);
-    if (!endPosition || isNaN(endPositionNum) || endPositionNum <= startPositionNum) {
-      ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.end_position_greater'));
-      return;
-    }
-
-    // Cover image and audio file are validated by UploadMiddleware.handleImageAndAudioUpload
-    // No need to validate here as middleware ensures both are present
-
-    // Validate description if provided
     if (req.body.description && (typeof req.body.description !== 'string' || req.body.description.length > 1000)) {
       ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.description_length'));
       return;
@@ -467,6 +444,48 @@ export class ValidationMiddleware {
         }
         throw error;
       }
+    }
+
+    next();
+  }
+
+  static validatePageCreation(req: Request, res: Response, next: NextFunction): void {
+    const { pageNumber, plainText, richText } = req.body;
+
+    const pageNumberNum = parseInt(pageNumber, 10);
+    if (!pageNumber || isNaN(pageNumberNum) || pageNumberNum < 1) {
+      ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.page_number_positive').replace('{label}', 'pageNumber'));
+      return;
+    }
+
+    if (!plainText || typeof plainText !== 'string' || plainText.trim().length === 0) {
+      ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.page_plain_text_required').replace('{label}', 'plainText'));
+      return;
+    }
+
+    if (richText === undefined || richText === null) {
+      ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.page_rich_text_required').replace('{label}', 'richText'));
+      return;
+    }
+
+    next();
+  }
+
+  static validatePageUpdate(req: Request, res: Response, next: NextFunction): void {
+    if (req.body.pageNumber !== undefined) {
+      const pageNumberNum = parseInt(req.body.pageNumber, 10);
+      if (isNaN(pageNumberNum) || pageNumberNum < 1) {
+        ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.page_number_positive').replace('{label}', 'pageNumber'));
+        return;
+      }
+    }
+
+    if (
+      req.body.plainText !== undefined &&
+      (typeof req.body.plainText !== 'string' || req.body.plainText.trim().length === 0)
+    ) {
+      ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.page_plain_text_required').replace('{label}', 'plainText'));
+      return;
     }
 
     next();

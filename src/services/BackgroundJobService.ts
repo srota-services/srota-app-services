@@ -488,7 +488,7 @@ export class BackgroundJobService {
          });
 
          // Calculate total duration by summing all chapter durations
-         const totalDuration = chapters.reduce((sum, chapter) => sum + chapter.duration, 0);
+         const totalDuration = chapters.reduce((sum, chapter) => sum + (chapter.duration ?? 0), 0);
 
          // Update audiobook duration
          await runWrite(this.prisma, async (tx) =>

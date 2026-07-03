@@ -397,6 +397,45 @@ export class UploadMiddleware {
       });
    };
 
+   // Static method to handle chapter create upload — cover required, audio optional (validated by service).
+   static handleChapterCreateUpload = (req: Request, res: Response, next: NextFunction): void => {
+      uploadImageAndAudio(req, res, (err) => {
+         if (err) {
+            return handleUploadError(err, req, res, next);
+         }
+
+         const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+
+         if (!files) {
+            res.status(400).json({
+               success: false,
+               message: 'Cover image is required',
+               error: 'MISSING_COVER_IMAGE'
+            });
+            return;
+         }
+
+         const coverImageFiles = files['coverImage'];
+         const audioFiles = files['file'] || files['audio'];
+
+         if (!coverImageFiles || coverImageFiles.length === 0) {
+            res.status(400).json({
+               success: false,
+               message: 'Cover image is required',
+               error: 'MISSING_COVER_IMAGE'
+            });
+            return;
+         }
+
+         (req as any).coverImageFile = coverImageFiles[0];
+         if (audioFiles && audioFiles.length > 0) {
+            (req as any).audioFile = audioFiles[0];
+         }
+
+         next();
+      });
+   };
+
    // Static method to handle combined image and audio uploads (mandatory for chapter creation)
    // Both coverImage and file are required
    static handleImageAndAudioUpload = (req: Request, res: Response, next: NextFunction): void => {

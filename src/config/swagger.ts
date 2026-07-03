@@ -64,6 +64,11 @@ const options: swaggerJsdoc.Options = {
                   square_64: 'https://cdn.example.com/uploads/images/audiobook/ab1/square_64.jpg',
                },
             },
+            AudiobookType: {
+               type: 'string',
+               enum: ['PUBLICATION', 'AUTHORING'],
+               description: 'STI discriminator — publication audiobooks require chapter audio; authoring audiobooks require pages and forbid genre/tag/mood/subscription metadata.',
+            },
             AudioBookOwnerType: {
                type: 'string',
                enum: ['AUTHOR', 'ORGANIZATION'],
@@ -134,6 +139,155 @@ const options: swaggerJsdoc.Options = {
                   },
                },
             },
+            SharedAudioBook: {
+               type: 'object',
+               required: ['id', 'title', 'author', 'type', 'languageId', 'isActive', 'isPublic', 'owner'],
+               properties: {
+                  id: { type: 'string', example: '123e4567-e89b-12d3-a456-426614174000' },
+                  title: { type: 'string', example: 'The Great Gatsby' },
+                  author: { type: 'string', example: 'F. Scott Fitzgerald' },
+                  type: { $ref: '#/components/schemas/AudiobookType' },
+                  narrator: { type: 'string', nullable: true },
+                  description: { type: 'string', nullable: true },
+                  duration: { type: 'number', minimum: 0 },
+                  fileSize: { type: 'number', minimum: 0 },
+                  coverImage: { type: 'string', nullable: true },
+                  imageAssets: { $ref: '#/components/schemas/ImageAssetsMap' },
+                  languageId: { type: 'string' },
+                  language: { $ref: '#/components/schemas/Language' },
+                  publisher: { type: 'string', nullable: true },
+                  publishDate: { type: 'string', format: 'date', nullable: true },
+                  isbn: { type: 'string', nullable: true },
+                  isActive: { type: 'boolean' },
+                  isPublic: { type: 'boolean' },
+                  owner: { $ref: '#/components/schemas/AudioBookOwner' },
+                  createdAt: { type: 'string', format: 'date-time' },
+                  updatedAt: { type: 'string', format: 'date-time' },
+                  scheduledAt: { type: 'string', format: 'date-time', nullable: true },
+                  chapterCount: { type: 'integer', minimum: 0 },
+               },
+            },
+            PublicationAudiobook: {
+               allOf: [
+                  { $ref: '#/components/schemas/SharedAudioBook' },
+                  {
+                     type: 'object',
+                     required: ['subscriptionGatingMode'],
+                     properties: {
+                        type: { type: 'string', enum: ['PUBLICATION'] },
+                        subscriptionGatingMode: { $ref: '#/components/schemas/SubscriptionGatingMode' },
+                        minSubscriptionTier: {
+                           type: 'string',
+                           enum: ['BASE', 'STANDARD', 'PREMIUM'],
+                           nullable: true,
+                        },
+                        subscriptionAccess: { $ref: '#/components/schemas/SubscriptionAccess' },
+                        moodId: {
+                           type: 'string',
+                           nullable: true,
+                           description: 'Assigned mood catalog ID',
+                        },
+                        mood: {
+                           type: 'object',
+                           nullable: true,
+                           description: 'Nested mood summary when moodId is set',
+                           properties: {
+                              id: { type: 'string' },
+                              name: { type: 'string' },
+                              description: { type: 'string', nullable: true },
+                              descriptionIcon: { type: 'string' },
+                              hexcode: { type: 'string' },
+                              icon: { type: 'string' },
+                              createdAt: { type: 'string', format: 'date-time' },
+                              updatedAt: { type: 'string', format: 'date-time' },
+                           },
+                        },
+                        genres: {
+                           type: 'array',
+                           items: { type: 'object', properties: { name: { type: 'string' } } },
+                        },
+                        audiobookTags: {
+                           type: 'array',
+                           items: { type: 'object', properties: { name: { type: 'string' } } },
+                        },
+                     },
+                  },
+               ],
+            },
+            AuthoringAudiobook: {
+               allOf: [
+                  { $ref: '#/components/schemas/SharedAudioBook' },
+                  {
+                     type: 'object',
+                     properties: {
+                        type: { type: 'string', enum: ['AUTHORING'] },
+                     },
+                  },
+               ],
+            },
+            Page: {
+               type: 'object',
+               required: ['id', 'chapterId', 'pageNumber', 'plainText', 'richText', 'createdAt', 'updatedAt'],
+               properties: {
+                  id: { type: 'string' },
+                  chapterId: { type: 'string' },
+                  pageNumber: { type: 'integer', minimum: 1 },
+                  plainText: { type: 'string' },
+                  richText: {
+                     type: 'object',
+                     description: 'Structured rich text (JSON object or array)',
+                  },
+                  createdAt: { type: 'string', format: 'date-time' },
+                  updatedAt: { type: 'string', format: 'date-time' },
+               },
+            },
+            CreatePageRequest: {
+               type: 'object',
+               required: ['pageNumber', 'plainText', 'richText'],
+               properties: {
+                  pageNumber: { type: 'integer', minimum: 1 },
+                  plainText: { type: 'string' },
+                  richText: { type: 'object' },
+               },
+            },
+            CreatePublicationAudiobookRequest: {
+               type: 'object',
+               required: ['title', 'author', 'owner', 'genreIds', 'coverImage', 'type'],
+               properties: {
+                  type: { type: 'string', enum: ['PUBLICATION'] },
+                  title: { type: 'string' },
+                  author: { type: 'string' },
+                  owner: { $ref: '#/components/schemas/AudioBookOwnerInput' },
+                  genreIds: { type: 'array', items: { type: 'string' } },
+                  coverImage: { type: 'string', format: 'binary' },
+                  tagIds: { type: 'array', items: { type: 'string' } },
+                  moodId: { type: 'string', nullable: true },
+                  subscriptionGatingMode: { $ref: '#/components/schemas/SubscriptionGatingMode' },
+                  minSubscriptionTier: { type: 'string', enum: ['BASE', 'STANDARD', 'PREMIUM'], nullable: true },
+                  languageId: { type: 'string' },
+                  narrator: { type: 'string' },
+                  description: { type: 'string' },
+                  isPublic: { type: 'boolean' },
+                  scheduledAt: { type: 'string', format: 'date-time' },
+               },
+            },
+            CreateAuthoringAudiobookRequest: {
+               type: 'object',
+               required: ['title', 'author', 'owner', 'coverImage', 'type'],
+               properties: {
+                  type: { type: 'string', enum: ['AUTHORING'] },
+                  title: { type: 'string' },
+                  author: { type: 'string' },
+                  owner: { $ref: '#/components/schemas/AudioBookOwnerInput' },
+                  coverImage: { type: 'string', format: 'binary' },
+                  languageId: { type: 'string' },
+                  narrator: { type: 'string' },
+                  description: { type: 'string' },
+                  isPublic: { type: 'boolean' },
+                  scheduledAt: { type: 'string', format: 'date-time' },
+               },
+               description: 'Authoring audiobooks forbid genreIds, tagIds, moodId, and subscription fields.',
+            },
             AudioBook: {
                type: 'object',
                required: ['id', 'title', 'author', 'languageId', 'isActive', 'isPublic', 'owner'],
@@ -143,6 +297,9 @@ const options: swaggerJsdoc.Options = {
                      format: 'uuid',
                      description: 'Unique identifier for the audiobook',
                      example: '123e4567-e89b-12d3-a456-426614174000'
+                  },
+                  type: {
+                     $ref: '#/components/schemas/AudiobookType',
                   },
                   title: {
                      type: 'string',
@@ -271,6 +428,13 @@ const options: swaggerJsdoc.Options = {
                }
             },
             CreateAudioBookRequest: {
+               oneOf: [
+                  { $ref: '#/components/schemas/CreatePublicationAudiobookRequest' },
+                  { $ref: '#/components/schemas/CreateAuthoringAudiobookRequest' },
+               ],
+               description: 'Discriminated by type. Defaults to PUBLICATION when type is omitted.',
+            },
+            CreateAudioBookRequestLegacy: {
                type: 'object',
                required: ['title', 'author', 'owner', 'genreIds', 'coverImage'],
                properties: {
@@ -1517,6 +1681,10 @@ const options: swaggerJsdoc.Options = {
          }
       },
       tags: [
+         {
+            name: 'Pages',
+            description: 'Authoring-mode chapter page content',
+         },
          {
             name: 'AudioBooks',
             description: 'Operations related to audiobooks'

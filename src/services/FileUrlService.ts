@@ -186,9 +186,9 @@ export class FileUrlService {
       const imageAssets = await this.resolveImageAssets('audiobook', dto.id);
       return {
          ...dto,
-         coverImage,
+         ...(coverImage !== undefined ? { coverImage } : {}),
          imageAssets,
-      };
+      } as T & { imageAssets: Record<string, string> };
    }
 
    async resolveAudioBookMediaList<T extends AudioBookDto>(dtos: T[]): Promise<(T & { imageAssets: Record<string, string> })[]> {
@@ -205,7 +205,7 @@ export class FileUrlService {
 
       return {
          ...chapter,
-         filePath: filePath ?? chapter.filePath,
+         filePath: (filePath ?? chapter.filePath) ?? null,
          coverImage: coverImage ?? chapter.coverImage,
          imageAssets,
       };
