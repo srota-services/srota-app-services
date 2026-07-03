@@ -52,7 +52,6 @@ function fieldIsPresent(value: unknown): boolean {
  */
 export function assertAuthoringAudiobookMetadataForbidden(
   payload: Record<string, unknown>,
-  context: 'create' | 'update',
 ): void {
   for (const field of AUTHORING_FORBIDDEN_AUDIOBOOK_FIELDS) {
     if (fieldIsPresent(payload[field])) {
@@ -61,12 +60,12 @@ export function assertAuthoringAudiobookMetadataForbidden(
       );
     }
   }
+}
 
-    if (context === 'update') {
-      if (payload['type'] !== undefined && payload['type'] !== null && payload['type'] !== '') {
-        throw ApiError.validationError(MessageHandler.getErrorMessage('validation.audiobook_type_immutable'));
-      }
-    }
+export function assertAudiobookTypeImmutableOnUpdate(payload: Record<string, unknown>): void {
+  if (payload['type'] !== undefined && payload['type'] !== null && payload['type'] !== '') {
+    throw ApiError.validationError(MessageHandler.getErrorMessage('validation.audiobook_type_immutable'));
+  }
 }
 
 export function assertAuthoringChapterTierForbidden(minSubscriptionTier: unknown): void {

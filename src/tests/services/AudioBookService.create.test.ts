@@ -39,6 +39,7 @@ describe('AudioBookService.createAudioBook validation and persistence', () => {
       title: 'Test Audiobook',
       author: 'Test Author',
       owner: { type: 'AUTHOR' as const, id: 'author-1' },
+      type: 'PUBLICATION' as const,
       genreIds: ['genre-1'],
    };
 
@@ -46,6 +47,7 @@ describe('AudioBookService.createAudioBook validation and persistence', () => {
       id: 'audiobook-1',
       title: baseCreateData.title,
       author: baseCreateData.author,
+      type: 'PUBLICATION',
       ownerType: 'AUTHOR',
       ownerId: 'author-1',
       languageId: 'lang-bn',

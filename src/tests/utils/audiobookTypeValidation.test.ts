@@ -5,6 +5,7 @@ import { AudiobookType } from '@prisma/client';
 import {
   parseAudiobookType,
   assertAuthoringAudiobookMetadataForbidden,
+  assertAudiobookTypeImmutableOnUpdate,
   assertAuthoringChapterRequiresPages,
   assertPublicationChapterRequiresAudio,
   validatePageInputs,
@@ -30,26 +31,28 @@ describe('audiobookTypeValidation', () => {
   describe('assertAuthoringAudiobookMetadataForbidden', () => {
     it('rejects genreIds on authoring create', () => {
       expect(() =>
-        assertAuthoringAudiobookMetadataForbidden({ genreIds: ['g1'] }, 'create'),
+        assertAuthoringAudiobookMetadataForbidden({ genreIds: ['g1'] }),
       ).toThrow(ApiError);
     });
 
     it('rejects subscription fields on authoring create', () => {
       expect(() =>
-        assertAuthoringAudiobookMetadataForbidden({ subscriptionGatingMode: 'AUDIOBOOK' }, 'create'),
-      ).toThrow(ApiError);
-    });
-
-    it('rejects type change on update', () => {
-      expect(() =>
-        assertAuthoringAudiobookMetadataForbidden({ type: 'PUBLICATION' }, 'update'),
+        assertAuthoringAudiobookMetadataForbidden({ subscriptionGatingMode: 'AUDIOBOOK' }),
       ).toThrow(ApiError);
     });
 
     it('allows core fields on authoring create', () => {
       expect(() =>
-        assertAuthoringAudiobookMetadataForbidden({ title: 'Draft', author: 'A' }, 'create'),
+        assertAuthoringAudiobookMetadataForbidden({ title: 'Draft', author: 'A' }),
       ).not.toThrow();
+    });
+  });
+
+  describe('assertAudiobookTypeImmutableOnUpdate', () => {
+    it('rejects type change on update', () => {
+      expect(() =>
+        assertAudiobookTypeImmutableOnUpdate({ type: 'PUBLICATION' }),
+      ).toThrow(ApiError);
     });
   });
 

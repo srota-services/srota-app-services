@@ -63,6 +63,7 @@ describe('AudioBookController subscription gating', () => {
       const mockBook = {
          id: audiobookId,
          title: 'Gated Book',
+         type: 'PUBLICATION',
          owner: { type: 'ORGANIZATION', id: orgId },
          subscriptionGatingMode: 'AUDIOBOOK',
          minSubscriptionTier: SubscriptionTierLevel.STANDARD,

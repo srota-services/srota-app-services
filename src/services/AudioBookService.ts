@@ -38,6 +38,7 @@ import { DEFAULT_LANGUAGE_CODE } from '../constants/defaultLanguages';
 import {
   parseAudiobookType,
   assertAuthoringAudiobookMetadataForbidden,
+  assertAudiobookTypeImmutableOnUpdate,
 } from '../utils/audiobookTypeValidation';
 
 const AUDIOBOOK_RELATIONS_INCLUDE = {
@@ -350,10 +351,9 @@ export class AudioBookService {
       const { tagIds, genreIds, ...audiobookData } = data;
 
       const audiobookType = parseAudiobookType(audiobookData.type);
-      assertAuthoringAudiobookMetadataForbidden(
-        { ...audiobookData, tagIds, genreIds },
-        'create',
-      );
+      if (audiobookType === AudiobookType.AUTHORING) {
+        assertAuthoringAudiobookMetadataForbidden({ ...audiobookData, tagIds, genreIds });
+      }
 
       // Validate required fields
       this.validateCreateData(audiobookData, genreIds, tagIds, audiobookType);
@@ -537,12 +537,10 @@ export class AudioBookService {
         throw ApiError.notFound('AudioBook');
       }
 
-      assertAuthoringAudiobookMetadataForbidden(
-        { ...data, tagIds, genreIds },
-        'update',
-      );
+      assertAudiobookTypeImmutableOnUpdate({ ...data, tagIds, genreIds });
 
       if (existingAudioBook.type === AudiobookType.AUTHORING) {
+        assertAuthoringAudiobookMetadataForbidden({ ...data, tagIds, genreIds });
         if (genreIds !== undefined || tagIds !== undefined) {
           throw ApiError.validationError(
             MessageHandler.getErrorMessage('validation.authoring_metadata_forbidden'),
