@@ -16,6 +16,8 @@ import { MessageHandler } from '../utils/MessageHandler';
 import { ApiError } from '../types/ApiError';
 import { HttpStatusCode, ErrorType } from '../types/common';
 import { AuthenticatedRequest } from '../types/auth';
+import { parsePagesFromBody } from '../utils/audiobookTypeValidation';
+import { AudiobookType } from '@prisma/client';
 import { isGuestRequest } from '../utils/guestCatalogDefaults';
 
 export class ChapterController {
@@ -363,38 +365,54 @@ export class ChapterController {
     *         $ref: '#/components/responses/InternalServerError'
     */
    createChapter = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
-      // Get files from combined upload middleware
       const uploadedCoverImage = (req as any).coverImageFile as Express.Multer.File | undefined;
       const uploadedFile = (req as any).audioFile as Express.Multer.File | undefined;
 
-      // Files are already validated by middleware, but double-check for safety
       if (!uploadedCoverImage) {
          ResponseHandler.validationError(res, 'Cover image is required');
          return;
       }
 
-      if (!uploadedFile) {
+      const audiobook = await this.prisma.audioBook.findUnique({
+         where: { id: req.body.audiobookId },
+         select: { type: true },
+      });
+
+      if (!audiobook) {
+         ResponseHandler.notFound(res, MessageHandler.getErrorMessage('not_found.audiobook'));
+         return;
+      }
+
+      const isAuthoring = audiobook.type === AudiobookType.AUTHORING;
+
+      if (!isAuthoring && !uploadedFile) {
          ResponseHandler.validationError(res, 'Audio file is required');
          return;
       }
 
-      // Parse form-data values (they come as strings from multipart/form-data)
       const chapterData: CreateChapterRequest = {
          audiobookId: req.body.audiobookId,
          title: req.body.title,
          description: req.body.description || undefined,
          chapterNumber: parseInt(req.body.chapterNumber, 10),
-         duration: parseInt(req.body.duration, 10),
-         startPosition: parseInt(req.body.startPosition, 10),
-         endPosition: parseInt(req.body.endPosition, 10),
       };
 
-      // Parse scheduledAt if provided (can be ISO string or Date)
+      if (isAuthoring) {
+         const pages = parsePagesFromBody(req.body.pages);
+         if (pages) {
+            chapterData.pages = pages;
+         }
+      } else {
+         chapterData.duration = parseInt(req.body.duration, 10);
+         chapterData.startPosition = parseInt(req.body.startPosition, 10);
+         chapterData.endPosition = parseInt(req.body.endPosition, 10);
+      }
+
       if (req.body.scheduledAt) {
          chapterData.scheduledAt = new Date(req.body.scheduledAt);
       }
 
-      if (req.body.minSubscriptionTier !== undefined) {
+      if (!isAuthoring && req.body.minSubscriptionTier !== undefined) {
          chapterData.minSubscriptionTier = parseOptionalMinSubscriptionTierFromForm(
             req.body.minSubscriptionTier,
          ) ?? null;
@@ -424,7 +442,11 @@ export class ChapterController {
          return;
       }
 
-      const chapter = await this.chapterService.createChapter(chapterData, uploadedFile, uploadedCoverImage);
+      const chapter = await this.chapterService.createChapter(
+         chapterData,
+         isAuthoring ? undefined : uploadedFile,
+         uploadedCoverImage,
+      );
 
       ResponseHandler.success(res, chapter, MessageHandler.getSuccessMessage('chapters.created'), 201);
    });

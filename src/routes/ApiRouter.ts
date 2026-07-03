@@ -8,6 +8,7 @@ import { authenticateJWT, authenticateJWTOrQuery } from '../middleware/AuthMiddl
 import { blockGuestMutations } from '../middleware/RoleMiddleware';
 import { createAudioBookRoutes } from './audioBookRoutes';
 import { createChapterRoutes } from './chapterRoutes';
+import { createPageRoutes } from './pageRoutes';
 import { createPlaybackRoutes } from './playbackRoutes';
 import { createBookmarkRoutes } from './bookmarkRoutes';
 import { createOfflineDownloadRoutes } from './offlineDownloadRoutes';
@@ -96,6 +97,7 @@ export class ApiRouter {
 
     // Chapter routes (mixed catalog GET + content management)
     v1Router.use('/', createChapterRoutes(this.prisma));
+    v1Router.use('/', createPageRoutes(this.prisma));
 
     // User-specific features
     v1Router.use('/playback', createPlaybackRoutes(this.prisma));

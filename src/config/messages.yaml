@@ -26,6 +26,13 @@ success:
     with_progress_retrieved: "Chapter with progress retrieved successfully"
     navigation_retrieved: "Chapter navigation retrieved successfully"
 
+  pages:
+    retrieved: "Pages retrieved successfully"
+    retrieved_by_id: "Page retrieved successfully"
+    created: "Page created successfully"
+    updated: "Page updated successfully"
+    deleted: "Page deleted successfully"
+
   genres:
     retrieved: "Genres retrieved successfully"
 
@@ -237,6 +244,22 @@ errors:
     chapter_tier_sequence_invalid: "Later chapters cannot require a lower plan than earlier ones"
     chapter_tier_increase_limit_exceeded: "An audiobook can have at most two plan upgrades across its chapters"
     subscription_tier_cannot_decrease: "You can only keep or raise the access level"
+    audiobook_type_invalid: "Audiobook type must be PUBLICATION or AUTHORING"
+    audiobook_type_immutable: "Audiobook type cannot be changed after creation"
+    authoring_metadata_forbidden: "Genre, tag, mood, and subscription fields are not allowed for authoring audiobooks"
+    authoring_chapter_tier_forbidden: "Subscription tier cannot be set on authoring chapters"
+    authoring_chapter_pages_required: "Authoring chapters must include at least one page"
+    authoring_last_page_forbidden: "Cannot delete the last page of an authoring chapter"
+    publication_chapter_audio_required: "Publication chapters require an audio file"
+    pages_publication_forbidden: "Pages are only allowed on authoring audiobooks"
+    pages_authoring_only: "This operation is only allowed for authoring audiobooks"
+    pages_json_invalid: "Pages must be a valid JSON array"
+    pages_array_required: "Pages must be provided as an array"
+    page_number_positive: "{label} must be a positive integer"
+    page_number_duplicate: "Page numbers must be unique within a chapter"
+    page_plain_text_required: "{label} plain text is required"
+    page_rich_text_required: "{label} rich text is required"
+    page_rich_text_invalid: "{label} rich text must be a JSON object or array"
     comment_content_required: "Comment content is required"
     comment_parent_invalid: "Parent comment is invalid"
     comment_meta_invalid: "Comment details must include only a playback position"
@@ -278,6 +301,7 @@ errors:
   not_found:
     audiobook: "AudioBook not found"
     chapter: "Chapter not found"
+    page: "Page not found"
     resource: "Resource not found"
     route: "Route {route} not found"
     user: "User not found"
@@ -287,6 +311,7 @@ errors:
 
   conflict:
     audiobook_exists: "AudioBook with this ISBN already exists"
+    page_number_exists: "A page with this number already exists for the chapter"
     resource_exists: "Resource already exists"
     user_exists: "User already exists"
     email_exists: "Email already exists"

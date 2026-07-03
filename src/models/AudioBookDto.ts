@@ -2,9 +2,12 @@
  * AudioBook DTO (Data Transfer Object) classes
  * Provides type-safe data structures for API communication
  */
-import { AudioBook as PrismaAudioBook, AudioBookOwnerType as PrismaAudioBookOwnerType, SubscriptionGatingMode, SubscriptionTierLevel } from '@prisma/client';
+import { AudioBook as PrismaAudioBook, AudioBookOwnerType as PrismaAudioBookOwnerType, AudiobookType as PrismaAudiobookType, SubscriptionGatingMode, SubscriptionTierLevel } from '@prisma/client';
 import { SubscriptionAccessDto } from './SubscriptionAccessDto';
 import { LanguageDto, toLanguageDto } from './LanguageDto';
+import type { MoodSummaryDto } from './MoodDto';
+import { toMoodSummaryDto } from './MoodDto';
+import { AudiobookTypeDto } from '../utils/audiobookTypeValidation';
 
 export type { SubscriptionAccessDto };
 /** @deprecated Use SubscriptionAccessDto */
@@ -48,10 +51,11 @@ export interface AudioBookOwnerDto {
   organization?: AudioBookOwnerOrganizationDetails;
 }
 
-export interface AudioBookDto {
+export interface SharedAudioBookDto {
   id: string;
   title: string;
   author: string;
+  type: AudiobookTypeDto;
   narrator?: string | undefined;
   description?: string | undefined;
   duration?: number | undefined;
@@ -65,20 +69,30 @@ export interface AudioBookDto {
   isbn?: string | undefined;
   isActive: boolean;
   isPublic: boolean;
-  subscriptionGatingMode: SubscriptionGatingModeDto;
-  minSubscriptionTier?: SubscriptionTierLevel | null | undefined;
   createdAt: Date;
   updatedAt: Date;
   scheduledAt?: Date | undefined;
-  audiobookTags?: AudioBookTagDto[] | undefined;
-  genres?: GenreDto[] | undefined;
   owner: AudioBookOwnerDto;
   subscriptionAccess?: AudiobookSubscriptionAccessDto;
-  /** Current user's star rating (1–5) for this audiobook; null if not reviewed. */
   rating?: number | null;
-  /** Number of chapters belonging to this audiobook (list responses). */
   chapterCount?: number;
 }
+
+export interface PublicationAudiobookDto extends SharedAudioBookDto {
+  type: 'PUBLICATION';
+  moodId?: string | null;
+  mood?: MoodSummaryDto;
+  subscriptionGatingMode: SubscriptionGatingModeDto;
+  minSubscriptionTier?: SubscriptionTierLevel | null | undefined;
+  audiobookTags?: AudioBookTagDto[] | undefined;
+  genres?: GenreDto[] | undefined;
+}
+
+export interface AuthoringAudiobookDto extends SharedAudioBookDto {
+  type: 'AUTHORING';
+}
+
+export type AudioBookDto = PublicationAudiobookDto | AuthoringAudiobookDto;
 
 export interface AudioBookTagDto {
   name: string;
@@ -92,12 +106,13 @@ export interface CreateAudioBookDto {
   title: string;
   author: string;
   owner: AudioBookOwnerInput;
+  type?: AudiobookTypeDto;
   narrator?: string;
   description?: string;
   duration?: number;
   fileSize?: number;
   coverImage?: string;
-  genreIds: string[]; // Required - at least one genre is mandatory
+  genreIds?: string[];
   languageId?: string;
   publisher?: string;
   publishDate?: Date;
@@ -137,6 +152,7 @@ export interface AudioBookQueryParams {
   limit?: number;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+  type?: AudiobookTypeDto | undefined;
   genreIds?: string[] | undefined;
   moodIds?: string[] | undefined;
   ownerType?: AudioBookOwnerType | undefined;
@@ -175,18 +191,18 @@ export function toSubscriptionGatingModeDto(mode: SubscriptionGatingMode): Subsc
   return mode as SubscriptionGatingModeDto;
 }
 
-/**
- * Convert Prisma AudioBook to DTO (owner details hydrated separately).
- */
-export function toAudioBookDto(audiobook: PrismaAudioBook & {
+function toAudiobookTypeDto(type: PrismaAudiobookType): AudiobookTypeDto {
+  return type as AudiobookTypeDto;
+}
+
+function buildSharedAudioBookDto(audiobook: PrismaAudioBook & {
   language?: { id: string; name: string; code: string; createdAt: Date; updatedAt: Date };
-  audiobookTags?: Array<{ id: string; audiobookId: string; tagId: string; createdAt: Date; tag: { id: string; name: string; createdAt: Date; updatedAt: Date } }>;
-  audioBookGenres?: Array<{ id: string; audiobookId: string; genreId: string; createdAt: Date; genre: { id: string; name: string; createdAt: Date; updatedAt: Date } }>;
-}): AudioBookDto {
+}): SharedAudioBookDto {
   return {
     id: audiobook.id,
     title: audiobook.title,
     author: audiobook.author,
+    type: toAudiobookTypeDto(audiobook.type),
     narrator: audiobook.narrator || undefined,
     description: audiobook.description || undefined,
     duration: audiobook.duration ?? undefined,
@@ -199,20 +215,47 @@ export function toAudioBookDto(audiobook: PrismaAudioBook & {
     isbn: audiobook.isbn || undefined,
     isActive: audiobook.isActive,
     isPublic: audiobook.isPublic,
+    createdAt: audiobook.createdAt,
+    updatedAt: audiobook.updatedAt,
+    scheduledAt: audiobook.scheduledAt || undefined,
+    owner: toOwnerDto(audiobook.ownerType, audiobook.ownerId),
+  };
+}
+
+/**
+ * Convert Prisma AudioBook to DTO (owner details hydrated separately).
+ * Branches on STI type — authoring responses exclude publication-only metadata.
+ */
+export function toAudioBookDto(audiobook: PrismaAudioBook & {
+  language?: { id: string; name: string; code: string; createdAt: Date; updatedAt: Date };
+  mood?: { id: string; name: string; description: string | null; purpose: string; descriptionIcon: string; hexcode: string; icon: string; createdAt: Date; updatedAt: Date } | null;
+  audiobookTags?: Array<{ id: string; audiobookId: string; tagId: string; createdAt: Date; tag: { id: string; name: string; createdAt: Date; updatedAt: Date } }>;
+  audioBookGenres?: Array<{ id: string; audiobookId: string; genreId: string; createdAt: Date; genre: { id: string; name: string; createdAt: Date; updatedAt: Date } }>;
+}): AudioBookDto {
+  const shared = buildSharedAudioBookDto(audiobook);
+
+  if (audiobook.type === PrismaAudiobookType.AUTHORING) {
+    return {
+      ...shared,
+      type: 'AUTHORING',
+    };
+  }
+
+  return {
+    ...shared,
+    type: 'PUBLICATION',
+    moodId: audiobook.moodId ?? null,
+    ...(audiobook.mood ? { mood: toMoodSummaryDto(audiobook.mood) } : {}),
     subscriptionGatingMode: toSubscriptionGatingModeDto(
       (audiobook as PrismaAudioBook & { subscriptionGatingMode?: SubscriptionGatingMode }).subscriptionGatingMode
         ?? SubscriptionGatingMode.NONE,
     ),
     minSubscriptionTier: (audiobook as PrismaAudioBook & { minSubscriptionTier?: SubscriptionTierLevel | null }).minSubscriptionTier ?? null,
-    createdAt: audiobook.createdAt,
-    updatedAt: audiobook.updatedAt,
-    scheduledAt: audiobook.scheduledAt || undefined,
     audiobookTags: audiobook.audiobookTags?.map(tag => ({
       name: tag.tag.name
     })) || undefined,
     genres: audiobook.audioBookGenres?.map(abg => ({
       name: abg.genre.name
     })) || undefined,
-    owner: toOwnerDto(audiobook.ownerType, audiobook.ownerId),
   };
 }

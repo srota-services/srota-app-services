@@ -50,7 +50,7 @@ export function createChapterRoutes(prisma: PrismaClient): Router {
    router.post(
       '/chapters',
       requireContentCreator(),
-      UploadMiddleware.handleImageAndAudioUpload,
+      UploadMiddleware.handleChapterCreateUpload,
       ValidationMiddleware.validateChapterCreation,
       chapterController.createChapter
    );

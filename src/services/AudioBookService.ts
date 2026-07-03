@@ -2,7 +2,7 @@
  * AudioBook Service Layer
  * Handles business logic and database operations following OOP principles
  */
-import { PrismaClient, Prisma, UserAudioBookType, SubscriptionGatingMode, SubscriptionTierLevel } from '@prisma/client';
+import { PrismaClient, Prisma, UserAudioBookType, SubscriptionGatingMode, SubscriptionTierLevel, AudiobookType } from '@prisma/client';
 import { SubscriptionClient, subscriptionClient } from '../clients/SubscriptionClient';
 import {
   AudioBookDto,
@@ -35,9 +35,14 @@ import { SubscriptionAccessService } from './SubscriptionAccessService';
 import { runInTransaction, runWrite } from '../utils/prismaTransaction';
 import { rethrowServiceError } from '../utils/serviceError';
 import { DEFAULT_LANGUAGE_CODE } from '../constants/defaultLanguages';
+import {
+  parseAudiobookType,
+  assertAuthoringAudiobookMetadataForbidden,
+} from '../utils/audiobookTypeValidation';
 
 const AUDIOBOOK_RELATIONS_INCLUDE = {
   language: true,
+  mood: true,
   audiobookTags: {
     include: {
       tag: true,
@@ -204,6 +209,7 @@ export class AudioBookService {
       search,
       active,
       scheduled,
+      type,
     } = params;
 
     const ownerFilter: Prisma.AudioBookWhereInput = ownerType && ownerId
@@ -218,6 +224,7 @@ export class AudioBookService {
 
     const where: Prisma.AudioBookWhereInput = {
       ...ownerFilter,
+      ...(type && { type: type as AudiobookType }),
       ...(isActive !== undefined && { isActive }),
       ...(isPublic !== undefined && { isPublic }),
       ...(genreIds && genreIds.length > 0 && {
@@ -342,19 +349,27 @@ export class AudioBookService {
       // Extract tagIds and genreIds from data before validation
       const { tagIds, genreIds, ...audiobookData } = data;
 
+      const audiobookType = parseAudiobookType(audiobookData.type);
+      assertAuthoringAudiobookMetadataForbidden(
+        { ...audiobookData, tagIds, genreIds },
+        'create',
+      );
+
       // Validate required fields
-      this.validateCreateData(audiobookData, genreIds, tagIds);
+      this.validateCreateData(audiobookData, genreIds, tagIds, audiobookType);
 
       if (coverImageSourcePath) {
         await this.imageAssetService.validateUploadSource('audiobook', coverImageSourcePath);
       }
 
       const moodIdForCreate =
-        audiobookData.moodId !== undefined
+        audiobookType === AudiobookType.PUBLICATION && audiobookData.moodId !== undefined
           ? (audiobookData.moodId === '' ? null : audiobookData.moodId)
           : undefined;
 
-      await this.validateReferencedIds(genreIds!, tagIds, moodIdForCreate);
+      if (audiobookType === AudiobookType.PUBLICATION) {
+        await this.validateReferencedIds(genreIds!, tagIds, moodIdForCreate);
+      }
 
       const languageIdForCreate = await this.resolveLanguageIdForCreate(audiobookData.languageId);
       await this.validateLanguageId(languageIdForCreate);
@@ -363,6 +378,7 @@ export class AudioBookService {
       const createData: Prisma.AudioBookUncheckedCreateInput = {
         title: audiobookData.title,
         author: audiobookData.author,
+        type: audiobookType,
         ownerType: toPrismaOwnerType(audiobookData.owner.type),
         ownerId: audiobookData.owner.id,
         languageId: languageIdForCreate,
@@ -391,17 +407,19 @@ export class AudioBookService {
       if (audiobookData.isbn !== undefined) createData.isbn = audiobookData.isbn;
 
       const gatingInput: AudiobookGatingInput = {};
-      if (audiobookData.subscriptionGatingMode !== undefined) {
-        gatingInput.subscriptionGatingMode = audiobookData.subscriptionGatingMode;
-      }
-      if (audiobookData.minSubscriptionTier !== undefined) {
-        gatingInput.minSubscriptionTier = audiobookData.minSubscriptionTier;
+      if (audiobookType === AudiobookType.PUBLICATION) {
+        if (audiobookData.subscriptionGatingMode !== undefined) {
+          gatingInput.subscriptionGatingMode = audiobookData.subscriptionGatingMode;
+        }
+        if (audiobookData.minSubscriptionTier !== undefined) {
+          gatingInput.minSubscriptionTier = audiobookData.minSubscriptionTier;
+        }
       }
       const gating = resolveAudiobookGatingCreate(gatingInput);
       createData.subscriptionGatingMode = gating.subscriptionGatingMode;
       createData.minSubscriptionTier = gating.minSubscriptionTier;
 
-      if (audiobookData.moodId !== undefined) {
+      if (audiobookType === AudiobookType.PUBLICATION && audiobookData.moodId !== undefined) {
         createData.moodId = moodIdForCreate ?? null;
       }
 
@@ -410,15 +428,17 @@ export class AudioBookService {
           data: createData,
         });
 
-        const uniqueGenreIds = [...new Set(genreIds!.map((genreId) => genreId.trim()))];
-        await tx.audioBookGenre.createMany({
-          data: uniqueGenreIds.map((genreId) => ({
-            audiobookId: created.id,
-            genreId,
-          })),
-        });
+        if (audiobookType === AudiobookType.PUBLICATION && genreIds && genreIds.length > 0) {
+          const uniqueGenreIds = [...new Set(genreIds.map((genreId) => genreId.trim()))];
+          await tx.audioBookGenre.createMany({
+            data: uniqueGenreIds.map((genreId) => ({
+              audiobookId: created.id,
+              genreId,
+            })),
+          });
+        }
 
-        if (tagIds && tagIds.length > 0) {
+        if (audiobookType === AudiobookType.PUBLICATION && tagIds && tagIds.length > 0) {
           const uniqueTagIds = [...new Set(tagIds.map((tagId) => tagId.trim()))];
           await tx.audioBookTag.createMany({
             data: uniqueTagIds.map((tagId) => ({
@@ -481,7 +501,7 @@ export class AudioBookService {
       }
 
       emitCacheInvalidation('audiobook', 'created', audiobook.id);
-      if (gating.subscriptionGatingMode !== SubscriptionGatingMode.NONE) {
+      if (audiobookType === AudiobookType.PUBLICATION && gating.subscriptionGatingMode !== SubscriptionGatingMode.NONE) {
          emitSubscriptionGatingInvalidation({ action: 'created', audiobookId: audiobook.id });
       }
       return this.hydrateOwner(
@@ -517,6 +537,24 @@ export class AudioBookService {
         throw ApiError.notFound('AudioBook');
       }
 
+      assertAuthoringAudiobookMetadataForbidden(
+        { ...data, tagIds, genreIds },
+        'update',
+      );
+
+      if (existingAudioBook.type === AudiobookType.AUTHORING) {
+        if (genreIds !== undefined || tagIds !== undefined) {
+          throw ApiError.validationError(
+            MessageHandler.getErrorMessage('validation.authoring_metadata_forbidden'),
+          );
+        }
+        if (data.subscriptionGatingMode !== undefined || data.minSubscriptionTier !== undefined || data.moodId !== undefined) {
+          throw ApiError.validationError(
+            MessageHandler.getErrorMessage('validation.authoring_metadata_forbidden'),
+          );
+        }
+      }
+
       // Validate: Cannot schedule an active audiobook
       if (data.scheduledAt !== undefined && existingAudioBook.isActive) {
         throw ApiError.validationError('Active audiobook cannot be scheduled');
@@ -528,16 +566,19 @@ export class AudioBookService {
       );
 
       const gatingInputProvided =
-        data.subscriptionGatingMode !== undefined || data.minSubscriptionTier !== undefined;
+        existingAudioBook.type === AudiobookType.PUBLICATION &&
+        (data.subscriptionGatingMode !== undefined || data.minSubscriptionTier !== undefined);
 
       if (coverImageSourcePath) {
         await this.imageAssetService.validateUploadSource('audiobook', coverImageSourcePath);
       }
 
-      if (genreIds !== undefined) {
-        await this.validateReferencedIds(genreIds.length > 0 ? genreIds : [], tagIds);
-      } else if (tagIds !== undefined && tagIds.length > 0) {
-        await this.validateReferencedIds([], tagIds);
+      if (existingAudioBook.type === AudiobookType.PUBLICATION) {
+        if (genreIds !== undefined) {
+          await this.validateReferencedIds(genreIds.length > 0 ? genreIds : [], tagIds);
+        } else if (tagIds !== undefined && tagIds.length > 0) {
+          await this.validateReferencedIds([], tagIds);
+        }
       }
 
       if (data.languageId !== undefined) {
@@ -572,7 +613,7 @@ export class AudioBookService {
           await syncChapterTiersForAudiobook(tx, id, gating);
         }
 
-        if (genreIds !== undefined) {
+        if (genreIds !== undefined && existingAudioBook.type === AudiobookType.PUBLICATION) {
           await tx.audioBookGenre.deleteMany({ where: { audiobookId: id } });
           if (genreIds.length > 0) {
             const uniqueGenreIds = [...new Set(genreIds.map((genreId) => genreId.trim()))];
@@ -585,7 +626,7 @@ export class AudioBookService {
           }
         }
 
-        if (tagIds !== undefined) {
+        if (tagIds !== undefined && existingAudioBook.type === AudiobookType.PUBLICATION) {
           await tx.audioBookTag.deleteMany({ where: { audiobookId: id } });
           if (tagIds.length > 0) {
             const uniqueTagIds = [...new Set(tagIds.map((tagId) => tagId.trim()))];
@@ -851,6 +892,7 @@ export class AudioBookService {
     data: Omit<CreateAudioBookDto, 'genreIds'>,
     genreIds?: string[],
     tagIds?: string[],
+    audiobookType: AudiobookType = AudiobookType.PUBLICATION,
   ): void {
     if (!data.title || data.title.trim().length === 0) {
       throw ApiError.validationError(MessageHandler.getErrorMessage('validation.title_required'));
@@ -868,27 +910,28 @@ export class AudioBookService {
       throw ApiError.validationError('owner.type must be AUTHOR or ORGANIZATION');
     }
 
-    // At least one genre is mandatory
-    if (!genreIds || !Array.isArray(genreIds) || genreIds.length === 0) {
-      throw ApiError.validationError(MessageHandler.getErrorMessage('validation.genre_required') || 'At least one genre is required');
+    // At least one genre is mandatory for publication audiobooks
+    if (audiobookType === AudiobookType.PUBLICATION) {
+      if (!genreIds || !Array.isArray(genreIds) || genreIds.length === 0) {
+        throw ApiError.validationError(MessageHandler.getErrorMessage('validation.genre_required') || 'At least one genre is required');
+      }
+
+      const invalidGenreIds = genreIds.filter(id => !id || typeof id !== 'string' || id.trim().length === 0);
+      if (invalidGenreIds.length > 0) {
+        throw ApiError.validationError(MessageHandler.getErrorMessage('validation.genre_required') || 'All genre IDs must be valid');
+      }
     }
 
-    // Validate that all genreIds are non-empty strings
-    const invalidGenreIds = genreIds.filter(id => !id || typeof id !== 'string' || id.trim().length === 0);
-    if (invalidGenreIds.length > 0) {
-      throw ApiError.validationError(MessageHandler.getErrorMessage('validation.genre_required') || 'All genre IDs must be valid');
+    if (audiobookType === AudiobookType.PUBLICATION && tagIds !== undefined && tagIds.length > 0) {
+      const invalidTagIds = tagIds.filter((id) => !id || typeof id !== 'string' || id.trim().length === 0);
+      if (invalidTagIds.length > 0) {
+        throw ApiError.validationError('All tag IDs must be valid');
+      }
     }
 
     // Validate ISBN format if provided
     if (data.isbn && !this.isValidISBN(data.isbn)) {
       throw ApiError.validationError(MessageHandler.getErrorMessage('validation.isbn_format'));
-    }
-
-    if (tagIds !== undefined && tagIds.length > 0) {
-      const invalidTagIds = tagIds.filter((id) => !id || typeof id !== 'string' || id.trim().length === 0);
-      if (invalidTagIds.length > 0) {
-        throw ApiError.validationError('All tag IDs must be valid');
-      }
     }
   }
 
