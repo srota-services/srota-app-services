@@ -366,7 +366,7 @@ model Chapter {
   duration      Int? // Duration in seconds (publication chapters)
   filePath      String? // Path to chapter audio file (publication chapters)
   fileSize      BigInt? // File size in bytes (publication chapters)
-  coverImage    String // URL to chapter cover image (required)
+  coverImage    String? // URL to chapter cover image (required for publication chapters)
 
   // Chapter start/end positions in main audiobook file (publication chapters)
   startPosition Int?

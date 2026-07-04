@@ -273,13 +273,13 @@ const options: swaggerJsdoc.Options = {
             },
             CreateAuthoringAudiobookRequest: {
                type: 'object',
-               required: ['title', 'author', 'owner', 'coverImage', 'type'],
+               required: ['title', 'author', 'owner', 'type'],
                properties: {
                   type: { type: 'string', enum: ['AUTHORING'] },
                   title: { type: 'string' },
                   author: { type: 'string' },
                   owner: { $ref: '#/components/schemas/AudioBookOwnerInput' },
-                  coverImage: { type: 'string', format: 'binary' },
+                  coverImage: { type: 'string', format: 'binary', description: 'Optional cover image upload' },
                   languageId: { type: 'string' },
                   narrator: { type: 'string' },
                   description: { type: 'string' },
@@ -505,9 +505,10 @@ const options: swaggerJsdoc.Options = {
             },
             CreateAudioBookFormData: {
                type: 'object',
-               required: ['title', 'author', 'owner', 'genreIds', 'coverImage'],
-               description: 'Multipart form-data variant. Stringify JSON fields (owner, genreIds, tagIds) when sending as form fields.',
+               required: ['title', 'author', 'owner'],
+               description: 'Multipart form-data variant. Stringify JSON fields (owner, genreIds, tagIds) when sending as form fields. Cover image is required unless type is AUTHORING.',
                properties: {
+                  type: { $ref: '#/components/schemas/AudiobookType' },
                   title: { type: 'string', example: 'My Audiobook' },
                   author: { type: 'string', example: 'Jane Doe' },
                   owner: {
@@ -517,7 +518,7 @@ const options: swaggerJsdoc.Options = {
                   },
                   genreIds: {
                      type: 'string',
-                     description: 'JSON array string or comma-separated genre IDs',
+                     description: 'JSON array string or comma-separated genre IDs (required for publication audiobooks)',
                      example: '["cgenre1234567890abcdefgh"]',
                   },
                   tagIds: {
@@ -525,7 +526,7 @@ const options: swaggerJsdoc.Options = {
                      description: 'Optional. JSON array string or comma-separated tag IDs',
                      example: '["ctag1234567890abcdefghij"]',
                   },
-                  coverImage: { type: 'string', format: 'binary', description: 'Cover image file (required on create)' },
+                  coverImage: { type: 'string', format: 'binary', description: 'Cover image file (required for publication audiobooks)' },
                   narrator: { type: 'string', description: 'Optional narrator name' },
                   description: { type: 'string', description: 'Optional description' },
                   languageId: { type: 'string', example: 'cl000000000000000000000002', description: 'Optional language catalog ID (defaults to Bengali)' },
@@ -726,7 +727,7 @@ const options: swaggerJsdoc.Options = {
                   duration: { type: 'integer' },
                   filePath: { type: 'string' },
                   fileSize: { type: 'integer' },
-                  coverImage: { type: 'string', description: 'Primary cover image (square_960 variant)' },
+                  coverImage: { type: 'string', nullable: true, description: 'Primary cover image (square_960 variant)' },
                   imageAssets: { $ref: '#/components/schemas/ImageAssetsMap' },
                   isActive: {
                      type: 'boolean',

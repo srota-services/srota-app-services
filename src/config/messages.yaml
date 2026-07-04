@@ -251,6 +251,8 @@ errors:
     authoring_chapter_pages_required: "Authoring chapters must include at least one page"
     authoring_last_page_forbidden: "Cannot delete the last page of an authoring chapter"
     publication_chapter_audio_required: "Publication chapters require an audio file"
+    publication_cover_required: "Cover image is required for publication audiobooks"
+    publication_chapter_cover_required: "Cover image is required for publication chapters"
     pages_publication_forbidden: "Pages are only allowed on authoring audiobooks"
     pages_authoring_only: "This operation is only allowed for authoring audiobooks"
     pages_json_invalid: "Pages must be a valid JSON array"

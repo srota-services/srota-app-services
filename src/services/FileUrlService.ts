@@ -202,12 +202,13 @@ export class FileUrlService {
       ]);
 
       const imageAssets = await this.resolveImageAssets('chapter', chapter.id);
+      const resolvedCover = coverImage ?? chapter.coverImage;
 
       return {
          ...chapter,
          filePath: (filePath ?? chapter.filePath) ?? null,
-         coverImage: coverImage ?? chapter.coverImage,
          imageAssets,
+         ...(resolvedCover ? { coverImage: resolvedCover } : {}),
       };
    }
 

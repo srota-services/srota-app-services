@@ -17,7 +17,7 @@ export interface ChapterData {
    duration?: number | null;
    filePath?: string | null;
    fileSize?: number | null;
-   coverImage: string;
+   coverImage?: string;
    imageAssets?: Record<string, string>;
    startPosition?: number | null;
    endPosition?: number | null;

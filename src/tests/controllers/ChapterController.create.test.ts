@@ -146,14 +146,54 @@ describe('ChapterController.createChapter', () => {
       );
    });
 
-   it('should return validation error when cover image is missing', async () => {
+   it('should return validation error when cover image is missing for publication chapter', async () => {
       (mockReq as any).coverImageFile = undefined;
+      (MessageHandler.getErrorMessage as jest.Mock).mockReturnValue('Cover image is required for publication chapters');
 
       await chapterController.createChapter(mockReq, mockRes, mockReq.next);
       await flushPromises();
 
-      expect(ResponseHandler.validationError).toHaveBeenCalledWith(mockRes, 'Cover image is required');
+      expect(ResponseHandler.validationError).toHaveBeenCalledWith(
+         mockRes,
+         'Cover image is required for publication chapters',
+      );
       expect(mockContentAuthorizationService.canCreateChapter).not.toHaveBeenCalled();
       expect(mockChapterService.createChapter).not.toHaveBeenCalled();
+   });
+
+   it('should create authoring chapter without cover image', async () => {
+      (mockPrisma.audioBook.findUnique as jest.Mock).mockResolvedValue({ type: 'AUTHORING' });
+      (mockReq as any).coverImageFile = undefined;
+      (mockReq as any).audioFile = undefined;
+      mockReq.body = {
+         audiobookId: 'audiobook-1',
+         title: 'Chapter 1',
+         chapterNumber: '1',
+         pages: JSON.stringify([
+            { pageNumber: 1, plainText: 'Hello', richText: { blocks: [] } },
+         ]),
+      };
+
+      const mockChapter = { id: 'chapter-1', title: 'Chapter 1' };
+      mockChapterService.createChapter.mockResolvedValue(mockChapter as any);
+      (MessageHandler.getSuccessMessage as jest.Mock).mockReturnValue('Chapter created');
+
+      await chapterController.createChapter(mockReq, mockRes, mockReq.next);
+      await flushPromises();
+
+      expect(mockChapterService.createChapter).toHaveBeenCalledWith(
+         expect.objectContaining({
+            audiobookId: 'audiobook-1',
+            title: 'Chapter 1',
+         }),
+         undefined,
+         undefined,
+      );
+      expect(ResponseHandler.success).toHaveBeenCalledWith(
+         mockRes,
+         mockChapter,
+         'Chapter created',
+         201,
+      );
    });
 });

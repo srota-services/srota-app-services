@@ -273,16 +273,45 @@ describe('AudioBookController', () => {
          );
       });
 
-      it('should return validation error when cover image is missing', async () => {
+      it('should return validation error when cover image is missing for publication audiobook', async () => {
          mockReq.body = { title: 'Book without Cover', author: 'Author Name' };
+         (MessageHandler.getErrorMessage as jest.Mock).mockReturnValue('Cover image is required for publication audiobooks');
 
          await audioBookController.createAudioBook(mockReq, mockRes, mockReq.next);
 
          expect(ResponseHandler.validationError).toHaveBeenCalledWith(
             mockRes,
-            'Cover image is required'
+            'Cover image is required for publication audiobooks',
          );
          expect(mockAudioBookService.createAudioBook).not.toHaveBeenCalled();
+      });
+
+      it('should create authoring audiobook without cover image', async () => {
+         mockReq.body = {
+            title: 'Draft Book',
+            author: 'Author Name',
+            type: 'AUTHORING',
+            owner: JSON.stringify({ type: 'AUTHOR', id: 'author-1' }),
+         };
+         (mockReq as any).coverImageFile = undefined;
+
+         const mockBook = { id: 'book-authoring', title: 'Draft Book', type: 'AUTHORING' };
+         mockAudioBookService.createAudioBook.mockResolvedValue(mockBook as any);
+         (MessageHandler.getSuccessMessage as jest.Mock).mockReturnValue('Created');
+
+         await audioBookController.createAudioBook(mockReq, mockRes, mockReq.next);
+         await flushPromises();
+
+         expect(mockAudioBookService.createAudioBook).toHaveBeenCalledWith(
+            expect.objectContaining({
+               title: 'Draft Book',
+               type: 'AUTHORING',
+            }),
+            'profile-1',
+            'test-token',
+            undefined,
+         );
+         expect(ResponseHandler.success).toHaveBeenCalled();
       });
 
       it('should handle file upload for cover image', async () => {

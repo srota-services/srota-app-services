@@ -282,7 +282,7 @@ export class ChapterController {
     * /api/v1/chapters:
     *   post:
     *     summary: Create a new chapter
-    *     description: Create a new chapter for an audiobook with optional audio file upload
+    *     description: Create a new chapter. Publication chapters require cover image and audio; authoring chapters require pages and may omit cover image.
     *     tags: [Chapters]
     *     requestBody:
     *       required: true
@@ -368,11 +368,6 @@ export class ChapterController {
       const uploadedCoverImage = (req as any).coverImageFile as Express.Multer.File | undefined;
       const uploadedFile = (req as any).audioFile as Express.Multer.File | undefined;
 
-      if (!uploadedCoverImage) {
-         ResponseHandler.validationError(res, 'Cover image is required');
-         return;
-      }
-
       const audiobook = await this.prisma.audioBook.findUnique({
          where: { id: req.body.audiobookId },
          select: { type: true },
@@ -384,6 +379,14 @@ export class ChapterController {
       }
 
       const isAuthoring = audiobook.type === AudiobookType.AUTHORING;
+
+      if (!isAuthoring && !uploadedCoverImage) {
+         ResponseHandler.validationError(
+            res,
+            MessageHandler.getErrorMessage('validation.publication_chapter_cover_required'),
+         );
+         return;
+      }
 
       if (!isAuthoring && !uploadedFile) {
          ResponseHandler.validationError(res, 'Audio file is required');

@@ -82,6 +82,18 @@ export function assertPublicationChapterRequiresAudio(hasAudio: boolean): void {
   }
 }
 
+export function assertPublicationCoverImageRequired(hasCover: boolean): void {
+  if (!hasCover) {
+    throw ApiError.validationError(MessageHandler.getErrorMessage('validation.publication_cover_required'));
+  }
+}
+
+export function assertPublicationChapterRequiresCover(hasCover: boolean): void {
+  if (!hasCover) {
+    throw ApiError.validationError(MessageHandler.getErrorMessage('validation.publication_chapter_cover_required'));
+  }
+}
+
 export function assertAuthoringChapterRequiresPages(pages: CreatePageInput[] | undefined): void {
   if (!pages || pages.length === 0) {
     throw ApiError.validationError(MessageHandler.getErrorMessage('validation.authoring_chapter_pages_required'));

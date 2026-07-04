@@ -8,6 +8,8 @@ import {
   assertAudiobookTypeImmutableOnUpdate,
   assertAuthoringChapterRequiresPages,
   assertPublicationChapterRequiresAudio,
+  assertPublicationCoverImageRequired,
+  assertPublicationChapterRequiresCover,
   validatePageInputs,
   assertPagesForbiddenForPublication,
 } from '../../utils/audiobookTypeValidation';
@@ -74,6 +76,26 @@ describe('audiobookTypeValidation', () => {
   describe('assertPublicationChapterRequiresAudio', () => {
     it('requires audio for publication chapters', () => {
       expect(() => assertPublicationChapterRequiresAudio(false)).toThrow(ApiError);
+    });
+  });
+
+  describe('assertPublicationCoverImageRequired', () => {
+    it('requires cover for publication audiobooks', () => {
+      expect(() => assertPublicationCoverImageRequired(false)).toThrow(ApiError);
+    });
+
+    it('allows cover for publication audiobooks', () => {
+      expect(() => assertPublicationCoverImageRequired(true)).not.toThrow();
+    });
+  });
+
+  describe('assertPublicationChapterRequiresCover', () => {
+    it('requires cover for publication chapters', () => {
+      expect(() => assertPublicationChapterRequiresCover(false)).toThrow(ApiError);
+    });
+
+    it('allows cover for publication chapters', () => {
+      expect(() => assertPublicationChapterRequiresCover(true)).not.toThrow();
     });
   });
 

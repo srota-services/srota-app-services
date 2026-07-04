@@ -2,7 +2,7 @@
  * AudioBook Controller
  * Handles HTTP requests and responses following MVC pattern
  */
-import { SubscriptionGatingMode, PrismaClient } from '@prisma/client';
+import { SubscriptionGatingMode, PrismaClient, AudiobookType } from '@prisma/client';
 import { Request, Response } from 'express';
 import { AudioBookService } from '../services/AudioBookService';
 import { BackgroundJobService } from '../services/BackgroundJobService';
@@ -13,6 +13,7 @@ import { MessageHandler } from '../utils/MessageHandler';
 import { ContentAuthorizationService } from '../services/ContentAuthorizationService';
 import { AuthenticatedRequest } from '../types/auth';
 import { parseAudioBookOwnerFromBody } from '../utils/parseAudioBookOwner';
+import { parseAudiobookType } from '../utils/audiobookTypeValidation';
 import { applyGuestCatalogDefaults, isGuestRequest } from '../utils/guestCatalogDefaults';
 
 function getBearerToken(req: Request): string | undefined {
@@ -149,9 +150,12 @@ export class AudioBookController {
     // Get cover image from upload middleware (audio file not required for audiobook creation)
     const uploadedCoverImage = (req as any).coverImageFile as Express.Multer.File | undefined;
 
-    // Cover image presence and MIME type are checked by upload middleware; spec validation runs in the service.
-    if (!uploadedCoverImage) {
-      ResponseHandler.validationError(res, 'Cover image is required');
+    const audiobookType = parseAudiobookType(req.body.type);
+    if (audiobookType !== AudiobookType.AUTHORING && !uploadedCoverImage) {
+      ResponseHandler.validationError(
+        res,
+        MessageHandler.getErrorMessage('validation.publication_cover_required'),
+      );
       return;
     }
 
