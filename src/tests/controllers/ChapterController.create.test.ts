@@ -161,6 +161,20 @@ describe('ChapterController.createChapter', () => {
       expect(mockChapterService.createChapter).not.toHaveBeenCalled();
    });
 
+   it('should reject pages on publication chapter create', async () => {
+      mockReq.body.pages = JSON.stringify([{ pageNumber: 1, richText: {} }]);
+      (MessageHandler.getErrorMessage as jest.Mock).mockReturnValue('Pages are only allowed on authoring audiobooks');
+
+      await chapterController.createChapter(mockReq, mockRes, mockReq.next);
+      await flushPromises();
+
+      expect(ResponseHandler.validationError).toHaveBeenCalledWith(
+         mockRes,
+         'Pages are only allowed on authoring audiobooks',
+      );
+      expect(mockChapterService.createChapter).not.toHaveBeenCalled();
+   });
+
    it('should create authoring chapter without cover image', async () => {
       (mockPrisma.audioBook.findUnique as jest.Mock).mockResolvedValue({ type: 'AUTHORING' });
       (mockReq as any).coverImageFile = undefined;

@@ -89,7 +89,7 @@ describe('ChapterService.createChapter authoring', () => {
         audiobookId: 'ab-authoring-1',
         title: 'Chapter 1',
         chapterNumber: 1,
-        pages: [{ pageNumber: 1, plainText: 'Hello', richText: {} }],
+        pages: [{ pageNumber: 1, richText: { blocks: [] } }],
       },
       undefined,
       undefined,
@@ -102,6 +102,14 @@ describe('ChapterService.createChapter authoring', () => {
         }),
       }),
     );
+    expect(mockTx.page.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          pageNumber: 1,
+          plainText: '',
+        }),
+      ],
+    });
     expect(result.coverImage).toBeUndefined();
   });
 });

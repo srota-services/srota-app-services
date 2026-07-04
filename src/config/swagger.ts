@@ -250,6 +250,16 @@ const options: swaggerJsdoc.Options = {
                   richText: { type: 'object' },
                },
             },
+            CreateChapterPageInput: {
+               type: 'object',
+               required: ['pageNumber', 'richText'],
+               description: 'Page payload embedded in authoring chapter create requests. Plain text is optional.',
+               properties: {
+                  pageNumber: { type: 'integer', minimum: 1 },
+                  plainText: { type: 'string' },
+                  richText: { type: 'object' },
+               },
+            },
             CreatePublicationAudiobookRequest: {
                type: 'object',
                required: ['title', 'author', 'owner', 'genreIds', 'coverImage', 'type'],

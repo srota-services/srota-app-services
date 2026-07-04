@@ -37,9 +37,10 @@ import { ChapterTranscodingCompletedMessage } from '../types/chapter-events';
 import {
    assertAuthoringChapterRequiresPages,
    assertAuthoringChapterTierForbidden,
+   assertPagesAllowedOnlyForAuthoring,
    assertPublicationChapterRequiresAudio,
    assertPublicationChapterRequiresCover,
-   validatePageInputs,
+   validateChapterPageInputs,
 } from '../utils/audiobookTypeValidation';
 import { toPageDto } from '../models/PageDto';
 import { runInTransaction } from '../utils/prismaTransaction';
@@ -234,7 +235,7 @@ export class ChapterService {
    ): Promise<ChapterData> {
       assertAuthoringChapterTierForbidden(chapterData.minSubscriptionTier);
       assertAuthoringChapterRequiresPages(chapterData.pages);
-      validatePageInputs(chapterData.pages!);
+      validateChapterPageInputs(chapterData.pages!);
 
       const existingChapter = await this.prisma.chapter.findFirst({
          where: {
@@ -282,7 +283,7 @@ export class ChapterService {
             data: chapterData.pages!.map((page) => ({
                chapterId: created.id,
                pageNumber: page.pageNumber,
-               plainText: page.plainText.trim(),
+               plainText: (page.plainText ?? '').trim(),
                richText: page.richText as object,
             })),
          });
@@ -333,6 +334,7 @@ export class ChapterService {
       uploadedFile?: Express.Multer.File,
       uploadedCoverImage?: Express.Multer.File,
    ): Promise<ChapterData> {
+      assertPagesAllowedOnlyForAuthoring(AudiobookType.PUBLICATION, chapterData.pages);
       assertPublicationChapterRequiresAudio(Boolean(uploadedFile || chapterData.filePath));
 
       const chapterTier = await resolveChapterTierForCreate(
