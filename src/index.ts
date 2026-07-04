@@ -22,6 +22,7 @@ import { TranscodingWorkerFactory } from './workers/TranscodingWorker';
 import { UserConsumerWorkerFactory } from './workers/UserConsumerWorker';
 import { SubscriptionConsumerWorkerFactory } from './workers/SubscriptionConsumerWorker';
 import { AuthorConsumerWorkerFactory } from './workers/AuthorConsumerWorker';
+import { OrganizationConsumerWorkerFactory } from './workers/OrganizationConsumerWorker';
 import { EntityDeletionConsumerWorkerFactory } from './workers/EntityDeletionConsumerWorker';
 import { ChapterTranscodingCompletedConsumerWorkerFactory } from './workers/ChapterTranscodingCompletedConsumerWorker';
 import { prisma } from './lib/prisma';
@@ -93,6 +94,9 @@ queueManager.createCleanupQueue();
 
       // Start author consumer worker
       await AuthorConsumerWorkerFactory.startWorker(prisma);
+
+      // Start organization consumer worker
+      await OrganizationConsumerWorkerFactory.startWorker(prisma);
 
       // Start entity deletion consumer worker
       await EntityDeletionConsumerWorkerFactory.startWorker(prisma);

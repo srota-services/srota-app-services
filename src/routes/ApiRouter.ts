@@ -24,6 +24,8 @@ import { createAuthorProfileRoutes } from './authorProfileRoutes';
 import { createOrganizationCatalogRoutes } from './organizationCatalogRoutes';
 import { createCommentRoutes } from './commentRoutes';
 import { createReviewRoutes } from './reviewRoutes';
+import { createOrganizationReviewRoutes } from './organizationReviewRoutes';
+import { createAuthorReviewRoutes } from './authorReviewRoutes';
 import { createFavoriteRoutes } from './favoriteRoutes';
 import { createPlaylistRoutes } from './playlistRoutes';
 import { createListeningHistoryRoutes } from './listeningHistoryRoutes';
@@ -108,6 +110,8 @@ export class ApiRouter {
     v1Router.use('/user-audiobooks', createUserAudioBookRoutes(this.prisma));
     v1Router.use('/comments', createCommentRoutes(this.prisma));
     v1Router.use('/reviews', createReviewRoutes(this.prisma));
+    v1Router.use('/organization-reviews', createOrganizationReviewRoutes(this.prisma));
+    v1Router.use('/author-reviews', createAuthorReviewRoutes(this.prisma));
     v1Router.use('/favorites', createFavoriteRoutes(this.prisma));
     v1Router.use('/playlists', createPlaylistRoutes(this.prisma));
     v1Router.use('/listening-history', createListeningHistoryRoutes(this.prisma));

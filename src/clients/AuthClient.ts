@@ -30,6 +30,7 @@ export interface AuthOrganizationCatalogInfo {
    preferredGenre?: string | null;
    websiteUrl?: string | null;
    teamSize?: string | null;
+   discoverable?: boolean;
 }
 
 export interface AuthMembershipInfo {
@@ -164,6 +165,24 @@ export class AuthClient {
             return null;
          }
          console.error('AuthClient.getMembership failed:', error);
+         throw error;
+      }
+   }
+
+   async getOrganizationMembershipsForUser(
+      accessToken: string,
+   ): Promise<Array<{ organizationId: string; role: string }>> {
+      try {
+         const response = await axios.get<{ memberships: Array<{ organizationId: string; role: string }> }>(
+            `${this.baseUrl}/auth/users/me/organization-memberships`,
+            {
+               headers: this.authHeaders(accessToken),
+               timeout: 5000,
+            },
+         );
+         return response.data?.memberships ?? [];
+      } catch (error) {
+         console.error('AuthClient.getOrganizationMembershipsForUser failed:', error);
          throw error;
       }
    }

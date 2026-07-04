@@ -18,6 +18,10 @@ describe('EntityDeletionCleanupService', () => {
       userProfile: { findUnique: jest.Mock; delete: jest.Mock };
       authorProfile: { findUnique: jest.Mock; delete: jest.Mock };
       audioBook: { findMany: jest.Mock };
+      authorReview: { deleteMany: jest.Mock };
+      authorTier: { deleteMany: jest.Mock };
+      organizationReview: { deleteMany: jest.Mock };
+      organizationTier: { deleteMany: jest.Mock };
    };
    let mockDeleteAudiobookWithChapters: jest.Mock;
 
@@ -39,6 +43,18 @@ describe('EntityDeletionCleanupService', () => {
          },
          audioBook: {
             findMany: jest.fn(),
+         },
+         authorReview: {
+            deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+         },
+         authorTier: {
+            deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+         },
+         organizationReview: {
+            deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+         },
+         organizationTier: {
+            deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
          },
       });
 
@@ -81,6 +97,8 @@ describe('EntityDeletionCleanupService', () => {
             select: { id: true },
          });
          expect(mockDeleteAudiobookWithChapters).toHaveBeenCalledTimes(2);
+         expect(mockPrisma.authorReview.deleteMany).toHaveBeenCalled();
+         expect(mockPrisma.authorTier.deleteMany).toHaveBeenCalledWith({ where: { authorId: 'author-1' } });
          expect(mockPrisma.authorProfile.delete).toHaveBeenCalledWith({ where: { authorId: 'author-1' } });
       });
    });
@@ -96,6 +114,8 @@ describe('EntityDeletionCleanupService', () => {
             select: { id: true },
          });
          expect(mockDeleteAudiobookWithChapters).toHaveBeenCalledWith('book-org-1');
+         expect(mockPrisma.organizationReview.deleteMany).toHaveBeenCalledWith({ where: { organizationId: 'org-1' } });
+         expect(mockPrisma.organizationTier.deleteMany).toHaveBeenCalledWith({ where: { organizationId: 'org-1' } });
       });
    });
 });

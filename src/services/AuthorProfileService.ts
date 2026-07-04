@@ -10,14 +10,17 @@ import { mediaCleanupService } from './MediaCleanupService';
 import { emitCacheInvalidation } from './DomainEventPublisher';
 import fs from 'fs';
 import { runWrite } from '../utils/prismaTransaction';
+import { AuthorTierService } from './AuthorTierService';
 
 export class AuthorProfileService {
    private prisma: PrismaClient;
    private imageAssetService: ImageAssetService;
+   private authorTierService: AuthorTierService;
 
    constructor(prisma: PrismaClient) {
       this.prisma = prisma;
       this.imageAssetService = new ImageAssetService(prisma);
+      this.authorTierService = new AuthorTierService(prisma);
    }
 
    async createFromEvent(message: AuthorCreationMessage): Promise<AuthorProfileDto | null> {
@@ -30,6 +33,7 @@ export class AuthorProfileService {
       });
 
       if (existing) {
+         await this.authorTierService.createDefaultForAuthor(message.authorId);
          return fileUrlService.resolveAuthorProfileMedia(toAuthorProfileDto(existing));
       }
 
@@ -58,6 +62,7 @@ export class AuthorProfileService {
                }),
             );
             emitCacheInvalidation('author-profile', 'created', updated.id, { authorId: message.authorId });
+            await this.authorTierService.createDefaultForAuthor(message.authorId);
             return fileUrlService.resolveAuthorProfileMedia(toAuthorProfileDto(updated));
          } finally {
             if (tempPath && fs.existsSync(tempPath) && tempPath.includes('source-image-')) {
@@ -67,6 +72,7 @@ export class AuthorProfileService {
       }
 
       emitCacheInvalidation('author-profile', 'created', profile.id, { authorId: message.authorId });
+      await this.authorTierService.createDefaultForAuthor(message.authorId);
       return fileUrlService.resolveAuthorProfileMedia(toAuthorProfileDto(profile));
    }
 
@@ -104,6 +110,16 @@ export class AuthorProfileService {
       }
 
       let updated = existing;
+
+      if (data.discoverable !== undefined) {
+         const discoverable = data.discoverable;
+         updated = await runWrite(this.prisma, async (tx) =>
+            tx.authorProfile.update({
+               where: { authorId },
+               data: { discoverable },
+            }),
+         );
+      }
 
       if (avatarSourcePath) {
          const { primaryStorageKey } = await this.imageAssetService.generateAndStoreVariants(

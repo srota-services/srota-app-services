@@ -890,6 +890,64 @@ const options: swaggerJsdoc.Options = {
                   rating: { type: 'integer', minimum: 1, maximum: 5 }
                }
             },
+            OrganizationReview: {
+               type: 'object',
+               properties: {
+                  id: { type: 'string' },
+                  organizationId: { type: 'string' },
+                  reviewerType: { type: 'string', enum: ['USER', 'AUTHOR', 'ORGANIZATION'] },
+                  reviewerId: { type: 'string' },
+                  rating: { type: 'integer', minimum: 1, maximum: 5 },
+                  description: { type: 'string', nullable: true },
+                  createdAt: { type: 'string', format: 'date-time' },
+                  updatedAt: { type: 'string', format: 'date-time' }
+               }
+            },
+            CreateOrganizationReviewRequest: {
+               type: 'object',
+               required: ['organizationId', 'rating'],
+               properties: {
+                  organizationId: { type: 'string' },
+                  rating: { type: 'integer', minimum: 1, maximum: 5 },
+                  description: { type: 'string', maxLength: 2000 }
+               }
+            },
+            UpdateOrganizationReviewRequest: {
+               type: 'object',
+               properties: {
+                  rating: { type: 'integer', minimum: 1, maximum: 5 },
+                  description: { type: 'string', nullable: true, maxLength: 2000 }
+               }
+            },
+            AuthorReview: {
+               type: 'object',
+               properties: {
+                  id: { type: 'string' },
+                  authorId: { type: 'string' },
+                  reviewerType: { type: 'string', enum: ['USER', 'AUTHOR', 'ORGANIZATION'] },
+                  reviewerId: { type: 'string' },
+                  rating: { type: 'integer', minimum: 1, maximum: 5 },
+                  description: { type: 'string', nullable: true },
+                  createdAt: { type: 'string', format: 'date-time' },
+                  updatedAt: { type: 'string', format: 'date-time' }
+               }
+            },
+            CreateAuthorReviewRequest: {
+               type: 'object',
+               required: ['authorId', 'rating'],
+               properties: {
+                  authorId: { type: 'string' },
+                  rating: { type: 'integer', minimum: 1, maximum: 5 },
+                  description: { type: 'string', maxLength: 2000 }
+               }
+            },
+            UpdateAuthorReviewRequest: {
+               type: 'object',
+               properties: {
+                  rating: { type: 'integer', minimum: 1, maximum: 5 },
+                  description: { type: 'string', nullable: true, maxLength: 2000 }
+               }
+            },
             Favorite: {
                type: 'object',
                properties: {
@@ -1034,6 +1092,7 @@ const options: swaggerJsdoc.Options = {
                      nullable: true,
                      enum: ['1-10', '11-50', '51-200', '200+']
                   },
+                  discoverable: { type: 'boolean', default: false },
                   memberCount: { type: 'integer', nullable: true },
                   createdAt: { type: 'string', format: 'date-time' },
                   updatedAt: { type: 'string', format: 'date-time' }
@@ -1124,6 +1183,7 @@ const options: swaggerJsdoc.Options = {
                   id: { type: 'string' },
                   authorId: { type: 'string', example: 'cauthor1234567890abcdefgh' },
                   avatar: { type: 'string', nullable: true, example: 'https://cdn.example.com/avatar.jpg', description: 'Primary avatar (square_120 variant)' },
+                  discoverable: { type: 'boolean', default: false },
                   imageAssets: { $ref: '#/components/schemas/ImageAssetsMap' },
                   createdAt: { type: 'string', format: 'date-time' },
                   updatedAt: { type: 'string', format: 'date-time' },
@@ -1711,6 +1771,14 @@ const options: swaggerJsdoc.Options = {
          {
             name: 'Reviews',
             description: 'Audiobook star ratings'
+         },
+         {
+            name: 'OrganizationReviews',
+            description: 'Organization reputation reviews'
+         },
+         {
+            name: 'AuthorReviews',
+            description: 'Author reputation reviews'
          },
          {
             name: 'Favorites',
