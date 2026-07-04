@@ -37,8 +37,10 @@ import { ChapterTranscodingCompletedMessage } from '../types/chapter-events';
 import {
    assertAuthoringChapterRequiresPages,
    assertAuthoringChapterTierForbidden,
+   assertPagesAllowedOnlyForAuthoring,
    assertPublicationChapterRequiresAudio,
-   validatePageInputs,
+   assertPublicationChapterRequiresCover,
+   validateChapterPageInputs,
 } from '../utils/audiobookTypeValidation';
 import { toPageDto } from '../models/PageDto';
 import { runInTransaction } from '../utils/prismaTransaction';
@@ -233,7 +235,7 @@ export class ChapterService {
    ): Promise<ChapterData> {
       assertAuthoringChapterTierForbidden(chapterData.minSubscriptionTier);
       assertAuthoringChapterRequiresPages(chapterData.pages);
-      validatePageInputs(chapterData.pages!);
+      validateChapterPageInputs(chapterData.pages!);
 
       const existingChapter = await this.prisma.chapter.findFirst({
          where: {
@@ -246,16 +248,12 @@ export class ChapterService {
          throw new ApiError('Chapter number already exists for this audiobook', 400);
       }
 
-      let coverImage = chapterData.coverImage;
+      let coverImage: string | null | undefined = chapterData.coverImage;
       let coverImagePath: string | undefined;
 
       if (uploadedCoverImage) {
          coverImagePath = uploadedCoverImage.path;
          coverImage = coverImage ?? 'pending';
-      }
-
-      if (!coverImage) {
-         throw new ApiError('Cover image is required', 400);
       }
 
       const isScheduled = chapterData.scheduledAt !== undefined;
@@ -267,7 +265,7 @@ export class ChapterService {
                title: chapterData.title,
                description: chapterData.description ?? null,
                chapterNumber: chapterData.chapterNumber,
-               coverImage,
+               coverImage: coverImage ?? null,
                minSubscriptionTier: null,
                duration: null,
                filePath: null,
@@ -285,7 +283,7 @@ export class ChapterService {
             data: chapterData.pages!.map((page) => ({
                chapterId: created.id,
                pageNumber: page.pageNumber,
-               plainText: page.plainText.trim(),
+               plainText: (page.plainText ?? '').trim(),
                richText: page.richText as object,
             })),
          });
@@ -336,6 +334,7 @@ export class ChapterService {
       uploadedFile?: Express.Multer.File,
       uploadedCoverImage?: Express.Multer.File,
    ): Promise<ChapterData> {
+      assertPagesAllowedOnlyForAuthoring(AudiobookType.PUBLICATION, chapterData.pages);
       assertPublicationChapterRequiresAudio(Boolean(uploadedFile || chapterData.filePath));
 
       const chapterTier = await resolveChapterTierForCreate(
@@ -379,9 +378,7 @@ export class ChapterService {
          coverImage = coverImage ?? 'pending';
       }
 
-      if (!coverImage) {
-         throw new ApiError('Cover image is required', 400);
-      }
+      assertPublicationChapterRequiresCover(Boolean(coverImage));
 
       const createData: any = {
          audiobookId: chapterData.audiobookId,
@@ -562,7 +559,7 @@ export class ChapterService {
          const oldFilePath = existingChapter.filePath;
 
          // Handle coverImage upload if provided
-         let coverImage = updateData.coverImage;
+         let coverImage: string | null | undefined = updateData.coverImage;
          let coverImagePath: string | undefined;
 
          if (uploadedCoverImage) {
@@ -570,7 +567,7 @@ export class ChapterService {
          }
 
          if (coverImage === undefined) {
-            coverImage = existingChapter.coverImage || '';
+            coverImage = existingChapter.coverImage;
          }
 
          const updatePayload: any = { ...updateData };
@@ -583,6 +580,8 @@ export class ChapterService {
          }
          if (coverImage !== undefined && !coverImagePath) {
             updatePayload.coverImage = coverImage;
+         } else if (coverImagePath) {
+            delete updatePayload.coverImage;
          }
 
          if (hasAudioUpload) {
@@ -1105,7 +1104,7 @@ export class ChapterService {
       duration: number | null;
       filePath: string | null;
       fileSize: bigint | null;
-      coverImage: string;
+      coverImage: string | null;
       startPosition: number | null;
       endPosition: number | null;
       minSubscriptionTier?: SubscriptionTierLevel | null;
@@ -1139,7 +1138,7 @@ export class ChapterService {
          duration: chapter.duration ?? null,
          filePath: chapter.filePath ?? null,
          fileSize: chapter.fileSize !== null && chapter.fileSize !== undefined ? Number(chapter.fileSize) : null,
-         coverImage: chapter.coverImage,
+         ...(chapter.coverImage ? { coverImage: chapter.coverImage } : {}),
          startPosition: chapter.startPosition ?? null,
          endPosition: chapter.endPosition ?? null,
          minSubscriptionTier: chapter.minSubscriptionTier ?? null,
@@ -1171,7 +1170,7 @@ export class ChapterService {
       duration: number | null;
       filePath: string | null;
       fileSize: bigint | null;
-      coverImage: string;
+      coverImage: string | null;
       startPosition: number | null;
       endPosition: number | null;
       isActive: boolean;

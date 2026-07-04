@@ -282,7 +282,7 @@ export class ChapterController {
     * /api/v1/chapters:
     *   post:
     *     summary: Create a new chapter
-    *     description: Create a new chapter for an audiobook with optional audio file upload
+    *     description: Create a new chapter. Publication chapters require cover image and audio; authoring chapters require at least one page (plain text optional) and may omit cover image.
     *     tags: [Chapters]
     *     requestBody:
     *       required: true
@@ -368,11 +368,6 @@ export class ChapterController {
       const uploadedCoverImage = (req as any).coverImageFile as Express.Multer.File | undefined;
       const uploadedFile = (req as any).audioFile as Express.Multer.File | undefined;
 
-      if (!uploadedCoverImage) {
-         ResponseHandler.validationError(res, 'Cover image is required');
-         return;
-      }
-
       const audiobook = await this.prisma.audioBook.findUnique({
          where: { id: req.body.audiobookId },
          select: { type: true },
@@ -384,6 +379,14 @@ export class ChapterController {
       }
 
       const isAuthoring = audiobook.type === AudiobookType.AUTHORING;
+
+      if (!isAuthoring && !uploadedCoverImage) {
+         ResponseHandler.validationError(
+            res,
+            MessageHandler.getErrorMessage('validation.publication_chapter_cover_required'),
+         );
+         return;
+      }
 
       if (!isAuthoring && !uploadedFile) {
          ResponseHandler.validationError(res, 'Audio file is required');
@@ -397,15 +400,24 @@ export class ChapterController {
          chapterNumber: parseInt(req.body.chapterNumber, 10),
       };
 
-      if (isAuthoring) {
+      if (!isAuthoring) {
+         const pagesField = req.body.pages;
+         if (pagesField !== undefined && pagesField !== null && pagesField !== '') {
+            ResponseHandler.validationError(
+               res,
+               MessageHandler.getErrorMessage('validation.pages_publication_forbidden'),
+            );
+            return;
+         }
+
+         chapterData.duration = parseInt(req.body.duration, 10);
+         chapterData.startPosition = parseInt(req.body.startPosition, 10);
+         chapterData.endPosition = parseInt(req.body.endPosition, 10);
+      } else {
          const pages = parsePagesFromBody(req.body.pages);
          if (pages) {
             chapterData.pages = pages;
          }
-      } else {
-         chapterData.duration = parseInt(req.body.duration, 10);
-         chapterData.startPosition = parseInt(req.body.startPosition, 10);
-         chapterData.endPosition = parseInt(req.body.endPosition, 10);
       }
 
       if (req.body.scheduledAt) {
@@ -566,6 +578,22 @@ export class ChapterController {
             MessageHandler.getErrorMessage('organizations.admin_required'),
          );
          return;
+      }
+
+      const pagesField = req.body.pages;
+      if (pagesField !== undefined && pagesField !== null && pagesField !== '') {
+         const existingChapter = await this.prisma.chapter.findUnique({
+            where: { id: id as string },
+            select: { audiobook: { select: { type: true } } },
+         });
+
+         if (existingChapter?.audiobook.type === AudiobookType.PUBLICATION) {
+            ResponseHandler.validationError(
+               res,
+               MessageHandler.getErrorMessage('validation.pages_publication_forbidden'),
+            );
+            return;
+         }
       }
 
       const uploadedFile = (req as any).audioFile as Express.Multer.File | undefined;

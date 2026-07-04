@@ -113,4 +113,18 @@ describe('AudioBookService.createAudioBook authoring', () => {
       }),
     ).rejects.toThrow(ApiError);
   });
+
+  it('requires cover image for publication audiobooks', async () => {
+    (mockPrisma.genre.findMany as jest.Mock).mockResolvedValue([{ id: 'genre-1' }]);
+
+    await expect(
+      service.createAudioBook({
+        title: 'Published Book',
+        author: 'Author',
+        owner: { type: 'AUTHOR', id: 'author-1' },
+        type: 'PUBLICATION',
+        genreIds: ['genre-1'],
+      }),
+    ).rejects.toThrow(ApiError);
+  });
 });

@@ -15,7 +15,7 @@ export interface PageData {
 
 export interface CreatePageInput {
   pageNumber: number;
-  plainText: string;
+  plainText?: string;
   richText: Record<string, unknown> | unknown[];
 }
 

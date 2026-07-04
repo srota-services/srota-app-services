@@ -8,7 +8,11 @@ import {
   assertAudiobookTypeImmutableOnUpdate,
   assertAuthoringChapterRequiresPages,
   assertPublicationChapterRequiresAudio,
+  assertPublicationCoverImageRequired,
+  assertPublicationChapterRequiresCover,
   validatePageInputs,
+  validateChapterPageInputs,
+  assertPagesAllowedOnlyForAuthoring,
   assertPagesForbiddenForPublication,
 } from '../../utils/audiobookTypeValidation';
 import { ApiError } from '../../types/ApiError';
@@ -77,9 +81,45 @@ describe('audiobookTypeValidation', () => {
     });
   });
 
+  describe('assertPublicationCoverImageRequired', () => {
+    it('requires cover for publication audiobooks', () => {
+      expect(() => assertPublicationCoverImageRequired(false)).toThrow(ApiError);
+    });
+
+    it('allows cover for publication audiobooks', () => {
+      expect(() => assertPublicationCoverImageRequired(true)).not.toThrow();
+    });
+  });
+
+  describe('assertPublicationChapterRequiresCover', () => {
+    it('requires cover for publication chapters', () => {
+      expect(() => assertPublicationChapterRequiresCover(false)).toThrow(ApiError);
+    });
+
+    it('allows cover for publication chapters', () => {
+      expect(() => assertPublicationChapterRequiresCover(true)).not.toThrow();
+    });
+  });
+
   describe('assertPagesForbiddenForPublication', () => {
     it('rejects pages on publication audiobooks', () => {
       expect(() => assertPagesForbiddenForPublication(AudiobookType.PUBLICATION)).toThrow(ApiError);
+    });
+  });
+
+  describe('assertPagesAllowedOnlyForAuthoring', () => {
+    it('rejects pages on publication audiobooks', () => {
+      expect(() =>
+        assertPagesAllowedOnlyForAuthoring(AudiobookType.PUBLICATION, [
+          { pageNumber: 1, richText: {} },
+        ]),
+      ).toThrow(ApiError);
+    });
+
+    it('allows empty pages on publication audiobooks', () => {
+      expect(() =>
+        assertPagesAllowedOnlyForAuthoring(AudiobookType.PUBLICATION, []),
+      ).not.toThrow();
     });
   });
 
@@ -95,6 +135,23 @@ describe('audiobookTypeValidation', () => {
         validatePageInputs([
           { pageNumber: 1, plainText: 'A', richText: {} },
           { pageNumber: 1, plainText: 'B', richText: {} },
+        ]),
+      ).toThrow(ApiError);
+    });
+  });
+
+  describe('validateChapterPageInputs', () => {
+    it('allows missing plainText for chapter page payloads', () => {
+      expect(() =>
+        validateChapterPageInputs([{ pageNumber: 1, richText: { blocks: [] } }]),
+      ).not.toThrow();
+    });
+
+    it('rejects duplicate page numbers', () => {
+      expect(() =>
+        validateChapterPageInputs([
+          { pageNumber: 1, richText: {} },
+          { pageNumber: 1, richText: {} },
         ]),
       ).toThrow(ApiError);
     });

@@ -32,6 +32,7 @@ describe('AudioBookService.createAudioBook validation and persistence', () => {
    const mockLanguageFindUnique = jest.fn();
    const mockValidateUploadSource = jest.fn();
    const mockGenerateAndStoreVariants = jest.fn();
+   const mockUpdateAudiobook = jest.fn();
    const mockTransaction = jest.fn();
    let service: AudioBookService;
 
@@ -42,6 +43,8 @@ describe('AudioBookService.createAudioBook validation and persistence', () => {
       type: 'PUBLICATION' as const,
       genreIds: ['genre-1'],
    };
+
+   const coverImageSourcePath = '/tmp/cover.jpg';
 
    const createdAudiobook = {
       id: 'audiobook-1',
@@ -78,11 +81,19 @@ describe('AudioBookService.createAudioBook validation and persistence', () => {
       mockMoodFindUnique.mockResolvedValue(null);
       mockLanguageFindUnique.mockResolvedValue({ id: 'lang-bn' });
       mockFindUnique.mockResolvedValue(createdAudiobook);
+      mockValidateUploadSource.mockResolvedValue(undefined);
+      mockGenerateAndStoreVariants.mockResolvedValue({
+         primaryStorageKey: 'uploads/images/audiobooks/cover.jpg',
+      });
+      mockUpdateAudiobook.mockResolvedValue({
+         ...createdAudiobook,
+         coverImage: 'uploads/images/audiobooks/cover.jpg',
+      });
 
       mockTransaction.mockImplementation(async (arg: unknown) => {
          if (typeof arg === 'function') {
             return arg({
-               audioBook: { create: mockCreate, delete: mockDeleteAudiobook },
+               audioBook: { create: mockCreate, delete: mockDeleteAudiobook, update: mockUpdateAudiobook },
                audioBookGenre: { createMany: mockGenreCreateMany, deleteMany: mockDeleteManyGenres },
                audioBookTag: { createMany: mockTagCreateMany, deleteMany: mockDeleteManyTags },
             });
@@ -106,7 +117,7 @@ describe('AudioBookService.createAudioBook validation and persistence', () => {
             create: mockCreate,
             delete: mockDeleteAudiobook,
             findUnique: mockFindUnique,
-            update: jest.fn(),
+            update: mockUpdateAudiobook,
          },
          audioBookGenre: {
             createMany: mockGenreCreateMany,
@@ -140,7 +151,9 @@ describe('AudioBookService.createAudioBook validation and persistence', () => {
    it('rejects invalid genre IDs before creating an audiobook', async () => {
       mockGenreFindMany.mockResolvedValue([]);
 
-      await expect(service.createAudioBook(baseCreateData)).rejects.toMatchObject({
+      await expect(
+         service.createAudioBook(baseCreateData, undefined, undefined, coverImageSourcePath),
+      ).rejects.toMatchObject({
          statusCode: 400,
          message: 'One or more genre IDs are invalid',
       });
@@ -151,7 +164,7 @@ describe('AudioBookService.createAudioBook validation and persistence', () => {
    it('creates the audiobook and genre links atomically in a transaction', async () => {
       mockValidateUploadSource.mockResolvedValue(undefined);
 
-      await service.createAudioBook(baseCreateData);
+      await service.createAudioBook(baseCreateData, undefined, undefined, coverImageSourcePath);
 
       expect(mockTransaction).toHaveBeenCalled();
       expect(mockCreate).toHaveBeenCalledTimes(1);

@@ -82,6 +82,18 @@ export function assertPublicationChapterRequiresAudio(hasAudio: boolean): void {
   }
 }
 
+export function assertPublicationCoverImageRequired(hasCover: boolean): void {
+  if (!hasCover) {
+    throw ApiError.validationError(MessageHandler.getErrorMessage('validation.publication_cover_required'));
+  }
+}
+
+export function assertPublicationChapterRequiresCover(hasCover: boolean): void {
+  if (!hasCover) {
+    throw ApiError.validationError(MessageHandler.getErrorMessage('validation.publication_chapter_cover_required'));
+  }
+}
+
 export function assertAuthoringChapterRequiresPages(pages: CreatePageInput[] | undefined): void {
   if (!pages || pages.length === 0) {
     throw ApiError.validationError(MessageHandler.getErrorMessage('validation.authoring_chapter_pages_required'));
@@ -94,10 +106,69 @@ export function assertPagesForbiddenForPublication(type: AudiobookType): void {
   }
 }
 
+export function assertPagesAllowedOnlyForAuthoring(
+  audiobookType: AudiobookType,
+  pages: CreatePageInput[] | undefined,
+): void {
+  if (pages && pages.length > 0) {
+    assertPagesForbiddenForPublication(audiobookType);
+  }
+}
+
 export function assertAuthoringAudiobookRequired(type: AudiobookType): void {
   if (!isAuthoringType(type)) {
     throw ApiError.validationError(MessageHandler.getErrorMessage('validation.pages_authoring_only'));
   }
+}
+
+export function validateChapterPageInput(input: CreatePageInput, index?: number): void {
+  const label = index !== undefined ? `pages[${index}]` : 'page';
+
+  if (input.pageNumber === undefined || !Number.isInteger(input.pageNumber) || input.pageNumber < 1) {
+    throw ApiError.validationError(
+      MessageHandler.getErrorMessage('validation.page_number_positive').replace('{label}', label),
+    );
+  }
+
+  if (input.plainText !== undefined && typeof input.plainText !== 'string') {
+    throw ApiError.validationError(
+      MessageHandler.getErrorMessage('validation.page_plain_text_invalid').replace('{label}', label),
+    );
+  }
+
+  if (input.richText === undefined || input.richText === null) {
+    throw ApiError.validationError(
+      MessageHandler.getErrorMessage('validation.page_rich_text_required').replace('{label}', label),
+    );
+  }
+
+  const richType = typeof input.richText;
+  if (richType !== 'object') {
+    throw ApiError.validationError(
+      MessageHandler.getErrorMessage('validation.page_rich_text_invalid').replace('{label}', label),
+    );
+  }
+
+  if (Array.isArray(input.richText)) {
+    return;
+  }
+
+  if (Object.prototype.toString.call(input.richText) !== '[object Object]') {
+    throw ApiError.validationError(
+      MessageHandler.getErrorMessage('validation.page_rich_text_invalid').replace('{label}', label),
+    );
+  }
+}
+
+export function validateChapterPageInputs(pages: CreatePageInput[]): void {
+  const seen = new Set<number>();
+  pages.forEach((page, index) => {
+    validateChapterPageInput(page, index);
+    if (seen.has(page.pageNumber)) {
+      throw ApiError.validationError(MessageHandler.getErrorMessage('validation.page_number_duplicate'));
+    }
+    seen.add(page.pageNumber);
+  });
 }
 
 export function validatePageInput(input: CreatePageInput, index?: number): void {

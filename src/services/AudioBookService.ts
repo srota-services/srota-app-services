@@ -39,6 +39,7 @@ import {
   parseAudiobookType,
   assertAuthoringAudiobookMetadataForbidden,
   assertAudiobookTypeImmutableOnUpdate,
+  assertPublicationCoverImageRequired,
 } from '../utils/audiobookTypeValidation';
 
 const AUDIOBOOK_RELATIONS_INCLUDE = {
@@ -314,7 +315,7 @@ export class AudioBookService {
           duration: ch.duration,
           filePath: ch.filePath,
           fileSize: Number(ch.fileSize),
-          coverImage: ch.coverImage,
+          ...(ch.coverImage ? { coverImage: ch.coverImage } : {}),
           startPosition: ch.startPosition,
           endPosition: ch.endPosition,
           isActive: ch.isActive,
@@ -357,6 +358,16 @@ export class AudioBookService {
 
       // Validate required fields
       this.validateCreateData(audiobookData, genreIds, tagIds, audiobookType);
+
+      const hasCover = Boolean(
+        coverImageSourcePath ||
+        (audiobookData.coverImage !== undefined &&
+          audiobookData.coverImage !== null &&
+          String(audiobookData.coverImage).trim() !== ''),
+      );
+      if (audiobookType === AudiobookType.PUBLICATION) {
+        assertPublicationCoverImageRequired(hasCover);
+      }
 
       if (coverImageSourcePath) {
         await this.imageAssetService.validateUploadSource('audiobook', coverImageSourcePath);

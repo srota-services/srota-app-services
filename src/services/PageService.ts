@@ -66,7 +66,7 @@ export class PageService {
           data: {
             chapterId,
             pageNumber: input.pageNumber,
-            plainText: input.plainText.trim(),
+            plainText: (input.plainText ?? '').trim(),
             richText: input.richText as object,
           },
         }),
@@ -175,7 +175,7 @@ export class PageService {
           data: {
             chapterId,
             pageNumber: pageInput.pageNumber,
-            plainText: pageInput.plainText.trim(),
+            plainText: (pageInput.plainText ?? '').trim(),
             richText: pageInput.richText as object,
           },
         });

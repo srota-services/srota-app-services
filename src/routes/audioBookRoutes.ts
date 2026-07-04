@@ -285,7 +285,7 @@ export function createAudioBookRoutes(prisma: PrismaClient): Router {
     * /api/v1/audiobooks:
     *   post:
     *     summary: Create audiobook
-    *     description: Create a new audiobook with required polymorphic owner. Send multipart/form-data with cover image.
+    *     description: Create a new audiobook with required polymorphic owner. Send multipart/form-data; cover image is required for publication audiobooks and optional for authoring audiobooks.
     *     tags: [AudioBooks]
     *     security:
     *       - bearerAuth: []
@@ -339,7 +339,7 @@ export function createAudioBookRoutes(prisma: PrismaClient): Router {
    router.post(
       '/',
       requireContentCreator(),
-      UploadMiddleware.handleRequiredImageUpload,
+      UploadMiddleware.handleAudiobookCreateUpload,
       ValidationMiddleware.validateAudioBookCreate,
       audioBookController.createAudioBook
    );
