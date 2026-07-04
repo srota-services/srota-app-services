@@ -60,7 +60,9 @@ export class AuthorProfileController {
       if (uploadedAvatar) {
          const profile = await this.authorProfileService.updateByAuthorId(
             authorId,
-            {},
+            req.body.discoverable !== undefined && typeof req.body.discoverable === 'boolean'
+               ? { discoverable: req.body.discoverable }
+               : {},
             uploadedAvatar.path,
          );
          ResponseHandler.success(
@@ -75,7 +77,18 @@ export class AuthorProfileController {
             : null;
       }
 
-      if (updateData.avatar === undefined) {
+      if (req.body.discoverable !== undefined) {
+         if (typeof req.body.discoverable !== 'boolean') {
+            ResponseHandler.validationError(
+               res,
+               MessageHandler.getErrorMessage('validation.discoverable_invalid'),
+            );
+            return;
+         }
+         updateData.discoverable = req.body.discoverable;
+      }
+
+      if (updateData.avatar === undefined && updateData.discoverable === undefined) {
          ResponseHandler.validationError(
             res,
             MessageHandler.getErrorMessage('validation.no_update_fields'),

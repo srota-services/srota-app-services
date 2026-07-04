@@ -1,6 +1,7 @@
-/**
- * Organization deletion events from auth-service
- */
+export interface OrganizationCreationMessage {
+  organizationId: string;
+}
+
 export interface OrganizationDeletionMessage {
-   organizationId: string;
+  organizationId: string;
 }

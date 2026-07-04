@@ -26,6 +26,10 @@ describe('AuthorProfileService', () => {
          create: jest.Mock;
          update: jest.Mock;
       };
+      authorTier: {
+         findUnique: jest.Mock;
+         create: jest.Mock;
+      };
    };
 
    beforeEach(() => {
@@ -34,6 +38,10 @@ describe('AuthorProfileService', () => {
             findUnique: jest.fn(),
             create: jest.fn(),
             update: jest.fn(),
+         },
+         authorTier: {
+            findUnique: jest.fn().mockResolvedValue(null),
+            create: jest.fn().mockResolvedValue({}),
          },
       });
       service = new AuthorProfileService(mockPrisma as unknown as PrismaClient);
@@ -63,5 +71,11 @@ describe('AuthorProfileService', () => {
 
       expect(result?.authorId).toBe('author-1');
       expect(mockPrisma.authorProfile.create).toHaveBeenCalled();
+      expect(mockPrisma.authorTier.create).toHaveBeenCalledWith({
+         data: {
+            authorId: 'author-1',
+            tier: 'TIER_3',
+         },
+      });
    });
 });

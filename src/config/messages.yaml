@@ -99,6 +99,20 @@ success:
     updated: "Review updated successfully"
     deleted: "Review deleted successfully"
 
+  organization_reviews:
+    retrieved: "Organization reviews retrieved successfully"
+    retrieved_by_id: "Organization review retrieved successfully"
+    created: "Organization review created successfully"
+    updated: "Organization review updated successfully"
+    deleted: "Organization review deleted successfully"
+
+  author_reviews:
+    retrieved: "Author reviews retrieved successfully"
+    retrieved_by_id: "Author review retrieved successfully"
+    created: "Author review created successfully"
+    updated: "Author review updated successfully"
+    deleted: "Author review deleted successfully"
+
   favorites:
     retrieved: "Favorites retrieved successfully"
     retrieved_by_id: "Favorite retrieved successfully"
@@ -269,6 +283,10 @@ errors:
     comment_meta_chapter_forbidden: "Comments cannot include a chapter reference here"
     comment_meta_position_invalid: "Playback position must be zero or greater"
     review_rating_invalid: "Rating must be a whole number from 1 to 5"
+    discoverable_invalid: "Discoverable must be true or false"
+    author_id_required: "Author is required"
+    update_field_required: "Provide at least one field to update"
+    description_length: "Description must be 2000 characters or fewer"
     chapter_id_required: "Chapter is required"
     bookmark_audiobook_id_forbidden: "Audiobook cannot be included when bookmarking a chapter"
     playlist_name_required: "Playlist name is required"
@@ -398,6 +416,23 @@ errors:
     not_found: "Review not found"
     already_exists: "You have already reviewed this audiobook"
     access_denied: "You can only modify your own reviews"
+    guest_forbidden: "Guests cannot create or modify reviews"
+    reviewer_author_required: "An author profile is required to submit this review"
+    reviewer_organization_required: "Organization admin access is required to submit this review"
+    reviewer_not_allowed: "Your account type cannot submit reviews"
+
+  organization_reviews:
+    not_found: "Organization review not found"
+    already_exists: "You have already reviewed this organization"
+    access_denied: "You can only modify your own organization reviews"
+    self_review_forbidden: "Organizations cannot review themselves"
+    member_review_forbidden: "Organization members cannot review their organization"
+
+  author_reviews:
+    not_found: "Author review not found"
+    already_exists: "You have already reviewed this author"
+    access_denied: "You can only modify your own author reviews"
+    self_review_forbidden: "Authors cannot review themselves"
 
   favorites:
     not_found: "Favorite not found"
