@@ -70,6 +70,40 @@ describe('UserProfileController', () => {
       });
    });
 
+   describe('getProfileByUserId', () => {
+      it('should return app profile for requested user', async () => {
+         const profile = {
+            id: 'profile-2',
+            userId: 'user-456',
+            username: 'memberuser',
+            avatar: 'avatar.jpg',
+            preferences: { theme: 'light' },
+         } as any;
+
+         mockReq.params = { userId: 'user-456' };
+         mockService.getUserProfile.mockResolvedValue(profile);
+         (MessageHandler.getSuccessMessage as jest.Mock).mockReturnValue('Profile retrieved');
+
+         await controller.getProfileByUserId(mockReq, mockRes, mockReq.next);
+
+         expect(mockService.getUserProfile).toHaveBeenCalledWith('user-456');
+         expect(ResponseHandler.success).toHaveBeenCalledWith(
+            mockRes,
+            profile,
+            'Profile retrieved',
+         );
+      });
+
+      it('should return 404 when profile is missing', async () => {
+         mockReq.params = { userId: 'missing-user' };
+         mockService.getUserProfile.mockResolvedValue(null);
+
+         await controller.getProfileByUserId(mockReq, mockRes, mockReq.next);
+
+         expect(ResponseHandler.notFound).toHaveBeenCalled();
+      });
+   });
+
    describe('updateProfile', () => {
       it('should update username and preferences only', async () => {
          mockReq.body = {

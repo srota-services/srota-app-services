@@ -1189,6 +1189,18 @@ const options: swaggerJsdoc.Options = {
                   updatedAt: { type: 'string', format: 'date-time' },
                },
             },
+            DiscoverableAuthor: {
+               type: 'object',
+               properties: {
+                  authorId: { type: 'string', example: 'cauthor1234567890abcdefgh' },
+                  slug: { type: 'string', example: 'jane-doe-a1b2c3d4' },
+                  firstName: { type: 'string', nullable: true, example: 'Jane' },
+                  lastName: { type: 'string', nullable: true, example: 'Doe' },
+                  avatar: { type: 'string', nullable: true, example: 'https://cdn.example.com/avatar.jpg' },
+                  discoverable: { type: 'boolean', example: true },
+                  imageAssets: { $ref: '#/components/schemas/ImageAssetsMap' },
+               },
+            },
             PaginatedResponse: {
                type: 'object',
                properties: {
