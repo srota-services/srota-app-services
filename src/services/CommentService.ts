@@ -2,14 +2,13 @@
  * Comment Service — audiobook comments with nested replies
  */
 import { Prisma, PrismaClient } from '@prisma/client';
+import { authClient } from '../clients/AuthClient';
 import {
    CommentDto,
    CommentQueryParams,
    CommentWithReplies,
-   CommentWithUserProfile,
    CreateCommentRequest,
    UpdateCommentRequest,
-   commentUserInclude,
    toCommentDto,
    validateCommentMeta,
 } from '../models/CommentDto';
@@ -18,11 +17,12 @@ import { MessageHandler } from '../utils/MessageHandler';
 import { HttpStatusCode, ErrorType } from '../types/common';
 import { fileUrlService } from './FileUrlService';
 import { emitCacheInvalidation } from './DomainEventPublisher';
+import { runWrite } from '../utils/prismaTransaction';
 
 export class CommentService {
    constructor(private prisma: PrismaClient) {}
 
-   async createComment(userProfileId: string, data: CreateCommentRequest): Promise<CommentDto> {
+   async createComment(userId: string, data: CreateCommentRequest, accessToken?: string): Promise<CommentDto> {
       const audiobook = await this.prisma.audioBook.findUnique({
          where: { id: data.audiobookId },
       });
@@ -68,7 +68,7 @@ export class CommentService {
       }
 
       const createData: Prisma.CommentUncheckedCreateInput = {
-         userProfileId,
+         userId,
          audiobookId: data.audiobookId,
          parentId: data.parentId ?? null,
          content: data.content.trim(),
@@ -77,16 +77,18 @@ export class CommentService {
          createData.meta = metaJson;
       }
 
-      const comment = await this.prisma.comment.create({
-         data: createData,
-         include: commentUserInclude,
-      });
+      const comment = await runWrite(this.prisma, async (tx) =>
+         tx.comment.create({ data: createData }),
+      );
 
       emitCacheInvalidation('comment', 'created', comment.id, { audiobookId: data.audiobookId });
-      return this.hydrateCommentRecord(comment);
+      return this.hydrateCommentRecord(comment, accessToken);
    }
 
-   async getComments(query: CommentQueryParams): Promise<{ comments: CommentDto[]; totalCount: number }> {
+   async getComments(
+      query: CommentQueryParams,
+      accessToken?: string,
+   ): Promise<{ comments: CommentDto[]; totalCount: number }> {
       const page = query.page ?? 1;
       const limit = query.limit ?? 20;
       const skip = (page - 1) * limit;
@@ -109,25 +111,22 @@ export class CommentService {
             skip,
             take: limit,
             orderBy: { [sortBy]: sortOrder },
-            include: commentUserInclude,
          }),
          this.prisma.comment.count({ where }),
       ]);
 
       return {
-         comments: await Promise.all(comments.map(c => this.hydrateCommentRecord(c))),
+         comments: await Promise.all(comments.map(c => this.hydrateCommentRecord(c, accessToken))),
          totalCount,
       };
    }
 
-   async getCommentById(id: string): Promise<CommentWithReplies> {
+   async getCommentById(id: string, accessToken?: string): Promise<CommentWithReplies> {
       const comment = await this.prisma.comment.findUnique({
          where: { id },
          include: {
-            ...commentUserInclude,
             replies: {
                orderBy: { createdAt: 'asc' },
-               include: commentUserInclude,
             },
          },
       });
@@ -140,17 +139,18 @@ export class CommentService {
          );
       }
 
-      const hydrated = await this.hydrateCommentRecord(comment);
+      const hydrated = await this.hydrateCommentRecord(comment, accessToken);
       return {
          ...hydrated,
-         replies: await Promise.all(comment.replies.map(r => this.hydrateCommentRecord(r))),
+         replies: await Promise.all(comment.replies.map(r => this.hydrateCommentRecord(r, accessToken))),
       };
    }
 
    async updateComment(
       id: string,
-      userProfileId: string,
-      data: UpdateCommentRequest
+      userId: string,
+      data: UpdateCommentRequest,
+      accessToken?: string,
    ): Promise<CommentDto> {
       const existing = await this.prisma.comment.findUnique({ where: { id } });
       if (!existing) {
@@ -160,7 +160,7 @@ export class CommentService {
             ErrorType.NOT_FOUND
          );
       }
-      if (existing.userProfileId !== userProfileId) {
+      if (existing.userId !== userId) {
          throw ApiError.forbidden(MessageHandler.getErrorMessage('comments.access_denied'));
       }
 
@@ -193,17 +193,18 @@ export class CommentService {
          );
       }
 
-      const updated = await this.prisma.comment.update({
-         where: { id },
-         data: updateData,
-         include: commentUserInclude,
-      });
+      const updated = await runWrite(this.prisma, async (tx) =>
+         tx.comment.update({
+            where: { id },
+            data: updateData,
+         }),
+      );
 
       emitCacheInvalidation('comment', 'updated', id, { audiobookId: existing.audiobookId });
-      return this.hydrateCommentRecord(updated);
+      return this.hydrateCommentRecord(updated, accessToken);
    }
 
-   async deleteComment(id: string, userProfileId: string): Promise<void> {
+   async deleteComment(id: string, userId: string): Promise<void> {
       const existing = await this.prisma.comment.findUnique({ where: { id } });
       if (!existing) {
          throw new ApiError(
@@ -212,18 +213,28 @@ export class CommentService {
             ErrorType.NOT_FOUND
          );
       }
-      if (existing.userProfileId !== userProfileId) {
+      if (existing.userId !== userId) {
          throw ApiError.forbidden(MessageHandler.getErrorMessage('comments.access_denied'));
       }
 
-      await this.prisma.comment.delete({ where: { id } });
+      await runWrite(this.prisma, async (tx) => tx.comment.delete({ where: { id } }));
       emitCacheInvalidation('comment', 'deleted', id, { audiobookId: existing.audiobookId });
    }
 
-   private async hydrateCommentRecord(comment: CommentWithUserProfile): Promise<CommentDto> {
+   private async hydrateCommentRecord(
+      comment: { userId: string; id: string; audiobookId: string; parentId: string | null; content: string; meta: Prisma.JsonValue | null; createdAt: Date; updatedAt: Date },
+      accessToken?: string,
+   ): Promise<CommentDto> {
       const dto = toCommentDto(comment);
-      if (comment.userProfile) {
-         dto.user = await fileUrlService.resolveCommentUserMedia(comment.userProfile);
+      if (accessToken) {
+         const profile = await authClient.getPublicUserProfile(comment.userId, accessToken);
+         if (profile) {
+            dto.user = await fileUrlService.resolveCommentUserMedia(comment.userId, {
+               username: profile.username,
+               avatar: profile.avatar ?? null,
+               ...(profile.imageAssets ? { imageAssets: profile.imageAssets } : {}),
+            });
+         }
       }
       return dto;
    }

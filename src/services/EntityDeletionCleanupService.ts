@@ -4,7 +4,7 @@
 import { PrismaClient } from '@prisma/client';
 import { AudiobookMediaCleanupService } from './AudiobookMediaCleanupService';
 import { mediaCleanupService } from './MediaCleanupService';
-import { emitCacheInvalidation } from './DomainEventPublisher';
+import { runWrite } from '../utils/prismaTransaction';
 
 export class EntityDeletionCleanupService {
    private audiobookMediaCleanup: AudiobookMediaCleanupService;
@@ -14,31 +14,18 @@ export class EntityDeletionCleanupService {
    }
 
    async cleanupUser(userId: string, authorId?: string): Promise<void> {
-      const profile = await this.prisma.userProfile.findUnique({
+      const offlineDownloads = await this.prisma.offlineDownload.findMany({
          where: { userId },
-         select: {
-            id: true,
-            avatar: true,
-            offlineDownloads: { select: { filePath: true } },
-         },
+         select: { filePath: true },
       });
 
-      if (!profile) {
-         if (authorId) {
-            await this.cleanupAuthor(authorId, userId);
-         }
-         return;
-      }
+      const mediaPaths: Array<string | null | undefined> = offlineDownloads.map((d) => d.filePath);
 
-      const mediaPaths: Array<string | null | undefined> = [
-         profile.avatar,
-         ...profile.offlineDownloads.map((d) => d.filePath),
-      ];
-
-      await this.prisma.userProfile.delete({ where: { userId } });
+      await runWrite(this.prisma, async (tx) => {
+         await tx.offlineDownload.deleteMany({ where: { userId } });
+      });
 
       await mediaCleanupService.deleteStoredFiles(mediaPaths);
-      emitCacheInvalidation('user-profile', 'deleted', profile.id, { userId });
 
       if (authorId) {
          await this.cleanupAuthor(authorId, userId);
@@ -46,11 +33,6 @@ export class EntityDeletionCleanupService {
    }
 
    async cleanupAuthor(authorId: string, _userId: string): Promise<void> {
-      const authorProfile = await this.prisma.authorProfile.findUnique({
-         where: { authorId },
-         select: { id: true, avatar: true },
-      });
-
       const audiobooks = await this.prisma.audioBook.findMany({
          where: { ownerType: 'AUTHOR', ownerId: authorId },
          select: { id: true },
@@ -58,12 +40,6 @@ export class EntityDeletionCleanupService {
 
       for (const book of audiobooks) {
          await this.audiobookMediaCleanup.deleteAudiobookWithChapters(book.id);
-      }
-
-      if (authorProfile) {
-         await this.prisma.authorProfile.delete({ where: { authorId } });
-         await mediaCleanupService.deleteStoredFile(authorProfile.avatar);
-         emitCacheInvalidation('author-profile', 'deleted', authorProfile.id, { authorId });
       }
    }
 

@@ -371,6 +371,32 @@ export const deleteFile = (filePath: string): boolean => {
 };
 
 export class UploadMiddleware {
+   // Audiobook create: cover required for publication, optional for authoring (type from multipart body).
+   static handleAudiobookCreateUpload = (req: Request, res: Response, next: NextFunction): void => {
+      uploadSingleImage(req, res, (err) => {
+         if (err) {
+            return handleUploadError(err, req, res, next);
+         }
+
+         if (req.file) {
+            (req as any).coverImageFile = req.file;
+         }
+
+         const type = req.body?.type;
+         const isAuthoring = type === 'AUTHORING';
+         if (!isAuthoring && !req.file) {
+            res.status(400).json({
+               success: false,
+               message: 'Cover image is required',
+               error: 'MISSING_COVER_IMAGE',
+            });
+            return;
+         }
+
+         next();
+      });
+   };
+
    // Static method to handle required image upload only (for audiobook creation)
    // coverImage is required, no audio file needed
    static handleRequiredImageUpload = (req: Request, res: Response, next: NextFunction): void => {
@@ -393,6 +419,31 @@ export class UploadMiddleware {
          (req as any).coverImageFile = req.file;
 
          // req.body is now populated after multer processes the multipart/form-data
+         next();
+      });
+   };
+
+   // Static method to handle chapter create upload — cover and audio optional (validated by service).
+   static handleChapterCreateUpload = (req: Request, res: Response, next: NextFunction): void => {
+      uploadImageAndAudio(req, res, (err) => {
+         if (err) {
+            return handleUploadError(err, req, res, next);
+         }
+
+         const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+
+         if (files) {
+            const coverImageFiles = files['coverImage'];
+            const audioFiles = files['file'] || files['audio'];
+
+            if (coverImageFiles && coverImageFiles.length > 0) {
+               (req as any).coverImageFile = coverImageFiles[0];
+            }
+            if (audioFiles && audioFiles.length > 0) {
+               (req as any).audioFile = audioFiles[0];
+            }
+         }
+
          next();
       });
    };
@@ -445,6 +496,31 @@ export class UploadMiddleware {
          (req as any).audioFile = audioFiles[0];
 
          // req.body is now populated after multer processes the multipart/form-data
+         next();
+      });
+   };
+
+   // Static method to handle optional combined image and audio uploads (for chapter/audiobook updates)
+   // coverImage and file are both optional; parses multipart once so body fields are preserved
+   static handleOptionalImageAndAudioUpload = (req: Request, res: Response, next: NextFunction): void => {
+      uploadImageAndAudio(req, res, (err) => {
+         if (err) {
+            return handleUploadError(err, req, res, next);
+         }
+
+         const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+         if (files) {
+            const coverImageFiles = files['coverImage'];
+            const audioFiles = files['file'] || files['audio'];
+
+            if (coverImageFiles && coverImageFiles.length > 0) {
+               (req as any).coverImageFile = coverImageFiles[0];
+            }
+            if (audioFiles && audioFiles.length > 0) {
+               (req as any).audioFile = audioFiles[0];
+            }
+         }
+
          next();
       });
    };

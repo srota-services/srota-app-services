@@ -4,20 +4,21 @@
  */
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { authenticateJWT } from '../middleware/AuthMiddleware';
+import { authenticateJWT, authenticateJWTOrQuery } from '../middleware/AuthMiddleware';
+import { blockGuestMutations } from '../middleware/RoleMiddleware';
 import { createAudioBookRoutes } from './audioBookRoutes';
 import { createChapterRoutes } from './chapterRoutes';
+import { createPageRoutes } from './pageRoutes';
 import { createPlaybackRoutes } from './playbackRoutes';
 import { createBookmarkRoutes } from './bookmarkRoutes';
 import { createOfflineDownloadRoutes } from './offlineDownloadRoutes';
 import { createHealthRoutes } from './healthRoutes';
 import { createGenreRoutes } from './genreRoutes';
+import { createLanguageRoutes } from './languageRoutes';
 import { createMoodRoutes } from './moodRoutes';
 import { createStreamingRoutes } from './streamingRoutes';
-import { createUserProfileRoutes } from './userProfileRoutes';
 import { createUserAudioBookRoutes } from './userAudioBookRoutes';
 import { createTagRoutes } from './tagRoutes';
-import { createAuthorProfileRoutes } from './authorProfileRoutes';
 import { createOrganizationCatalogRoutes } from './organizationCatalogRoutes';
 import { createCommentRoutes } from './commentRoutes';
 import { createReviewRoutes } from './reviewRoutes';
@@ -75,23 +76,32 @@ export class ApiRouter {
     // SSE stream supports Bearer header or ?access_token= (EventSource)
     v1Router.use('/events', createDomainEventsRoutes());
 
+    // Streaming supports Bearer or ?access_token= for HLS segment requests
+    v1Router.use('/stream', authenticateJWTOrQuery, createStreamingRoutes(this.prisma));
+
     // Apply JWT authentication middleware to all other v1 routes
     v1Router.use(authenticateJWT);
 
-    // Mount all route modules (protected routes)
+    // Guests may browse via GET; block POST/PUT/PATCH/DELETE globally
+    v1Router.use(blockGuestMutations());
+
+    // Catalog routes (guest browse)
     v1Router.use('/audiobooks', createAudioBookRoutes(this.prisma));
+    v1Router.use('/genres', createGenreRoutes(this.prisma));
+    v1Router.use('/languages', createLanguageRoutes(this.prisma));
+    v1Router.use('/moods', createMoodRoutes(this.prisma));
+    v1Router.use('/tags', createTagRoutes(this.prisma));
+    v1Router.use('/organizations', createOrganizationCatalogRoutes(this.prisma));
+
+    // Chapter routes (mixed catalog GET + content management)
     v1Router.use('/', createChapterRoutes(this.prisma));
+    v1Router.use('/', createPageRoutes(this.prisma));
+
+    // User-specific features
     v1Router.use('/playback', createPlaybackRoutes(this.prisma));
     v1Router.use('/', createBookmarkRoutes(this.prisma));
     v1Router.use('/', createOfflineDownloadRoutes(this.prisma));
-    v1Router.use('/genres', createGenreRoutes(this.prisma));
-    v1Router.use('/moods', createMoodRoutes(this.prisma));
-    v1Router.use('/tags', createTagRoutes(this.prisma));
-    v1Router.use('/author-profiles', createAuthorProfileRoutes(this.prisma));
-    v1Router.use('/stream', createStreamingRoutes(this.prisma));
-    v1Router.use('/', createUserProfileRoutes(this.prisma));
     v1Router.use('/user-audiobooks', createUserAudioBookRoutes(this.prisma));
-    v1Router.use('/organizations', createOrganizationCatalogRoutes(this.prisma));
     v1Router.use('/comments', createCommentRoutes(this.prisma));
     v1Router.use('/reviews', createReviewRoutes(this.prisma));
     v1Router.use('/favorites', createFavoriteRoutes(this.prisma));

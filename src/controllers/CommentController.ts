@@ -12,12 +12,21 @@ import {
    CreateCommentRequest,
    UpdateCommentRequest,
 } from '../models/CommentDto';
-import { resolveUserProfileId } from '../utils/resolveUserProfileId';
+import { resolveUserId } from '../utils/resolveUserId';
+
+function getBearerToken(req: Request): string | undefined {
+   const authorization = req.headers.authorization;
+   if (!authorization || !authorization.startsWith('Bearer ')) {
+      return undefined;
+   }
+   const token = authorization.slice(7).trim();
+   return token.length > 0 ? token : undefined;
+}
 
 export class CommentController {
    private commentService: CommentService;
 
-   constructor(private prisma: PrismaClient) {
+   constructor(prisma: PrismaClient) {
       this.commentService = new CommentService(prisma);
    }
 
@@ -42,9 +51,9 @@ export class CommentController {
     *         $ref: '#/components/responses/NotFound'
     */
    createComment = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
-      const userProfileId = await resolveUserProfileId(this.prisma, req);
+      const userId = resolveUserId(req);
       const data: CreateCommentRequest = req.body;
-      const comment = await this.commentService.createComment(userProfileId, data);
+      const comment = await this.commentService.createComment(userId, data, getBearerToken(req));
       ResponseHandler.success(res, comment, MessageHandler.getSuccessMessage('comments.created'), 201);
    });
 
@@ -81,7 +90,7 @@ export class CommentController {
          sortBy: (req.query['sortBy'] as CommentQueryParams['sortBy']) || 'createdAt',
          sortOrder: (req.query['sortOrder'] as CommentQueryParams['sortOrder']) || 'desc',
       };
-      const result = await this.commentService.getComments(query);
+      const result = await this.commentService.getComments(query, getBearerToken(req));
       const pagination = ResponseHandler.calculatePagination(page, limit, result.totalCount);
       ResponseHandler.paginated(
          res,
@@ -111,7 +120,7 @@ export class CommentController {
     */
    getCommentById = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
       const { id } = req.params as { id: string };
-      const comment = await this.commentService.getCommentById(id);
+      const comment = await this.commentService.getCommentById(id, getBearerToken(req));
       ResponseHandler.success(res, comment, MessageHandler.getSuccessMessage('comments.retrieved_by_id'));
    });
 
@@ -142,10 +151,10 @@ export class CommentController {
     *         $ref: '#/components/responses/NotFound'
     */
    updateComment = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
-      const userProfileId = await resolveUserProfileId(this.prisma, req);
+      const userId = resolveUserId(req);
       const { id } = req.params as { id: string };
       const data: UpdateCommentRequest = req.body;
-      const comment = await this.commentService.updateComment(id, userProfileId, data);
+      const comment = await this.commentService.updateComment(id, userId, data, getBearerToken(req));
       ResponseHandler.success(res, comment, MessageHandler.getSuccessMessage('comments.updated'));
    });
 
@@ -170,9 +179,9 @@ export class CommentController {
     *         $ref: '#/components/responses/NotFound'
     */
    deleteComment = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
-      const userProfileId = await resolveUserProfileId(this.prisma, req);
+      const userId = resolveUserId(req);
       const { id } = req.params as { id: string };
-      await this.commentService.deleteComment(id, userProfileId);
+      await this.commentService.deleteComment(id, userId);
       ResponseHandler.success(res, null, MessageHandler.getSuccessMessage('comments.deleted'));
    });
 }

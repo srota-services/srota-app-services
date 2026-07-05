@@ -5,6 +5,7 @@
 import * as amqp from 'amqplib';
 import { config } from './env';
 import { rabbitmqLogger } from './logger';
+import { ChapterTranscodingCompletedMessage } from '../types/chapter-events';
 
 export interface QueueConfig {
    name: string;
@@ -238,6 +239,36 @@ export class RabbitMQConnection {
 
       await this.channel.bindQueue(`${queuePrefix}.users.deleted`, 'users', 'user.deleted');
 
+      await this.channel.assertQueue(`${queuePrefix}.users.subscription.changed`, {
+         durable: true,
+         exclusive: false,
+         autoDelete: false,
+         arguments: {
+            'x-message-ttl': 3600000
+         }
+      });
+
+      await this.channel.bindQueue(
+         `${queuePrefix}.users.subscription.changed`,
+         'users',
+         'user.subscription.changed',
+      );
+
+      await this.channel.assertQueue(`${queuePrefix}.subscription.gating.changed`, {
+         durable: true,
+         exclusive: false,
+         autoDelete: false,
+         arguments: {
+            'x-message-ttl': 3600000
+         }
+      });
+
+      await this.channel.bindQueue(
+         `${queuePrefix}.subscription.gating.changed`,
+         'users',
+         'subscription.gating.changed',
+      );
+
       rabbitmqLogger.info('Users exchange and queue setup completed');
    }
 
@@ -268,6 +299,22 @@ export class RabbitMQConnection {
       // Bind queue to exchange with routing key
       await this.channel.bindQueue(`${queuePrefix}.chapters.deleted`, 'chapters', 'chapter.deleted');
 
+      // Chapter transcoding completed queue (streaming-service → app-service)
+      await this.channel.assertQueue(`${queuePrefix}.chapters.transcoding.completed`, {
+         durable: true,
+         exclusive: false,
+         autoDelete: false,
+         arguments: {
+            'x-message-ttl': 3600000,
+         },
+      });
+
+      await this.channel.bindQueue(
+         `${queuePrefix}.chapters.transcoding.completed`,
+         'chapters',
+         'chapter.transcoding.completed',
+      );
+
       rabbitmqLogger.info('Chapters exchange and queue setup completed');
    }
 
@@ -283,17 +330,6 @@ export class RabbitMQConnection {
          durable: true,
          autoDelete: false
       });
-
-      await this.channel.assertQueue(`${queuePrefix}.authors.created`, {
-         durable: true,
-         exclusive: false,
-         autoDelete: false,
-         arguments: {
-            'x-message-ttl': 3600000
-         }
-      });
-
-      await this.channel.bindQueue(`${queuePrefix}.authors.created`, 'authors', 'author.created');
 
       await this.channel.assertQueue(`${queuePrefix}.authors.deleted`, {
          durable: true,
@@ -423,6 +459,121 @@ export class RabbitMQConnection {
       } catch (error) {
          rabbitmqLogger.error({ err: error, chapterId }, 'Error publishing chapter deletion event');
          return false;
+      }
+   }
+
+   /**
+    * Publish chapter gating changed event (chapter minSubscriptionTier change)
+    */
+   public async publishChapterGatingChanged(data: {
+      action: string;
+      chapterId: string;
+      audiobookId: string;
+   }): Promise<boolean> {
+      if (!this.channel) {
+         throw new Error('Channel not available');
+      }
+
+      const routingKey = 'chapter.gating.changed';
+
+      try {
+         const message = Buffer.from(JSON.stringify({
+            action: data.action,
+            chapterId: data.chapterId,
+            audiobookId: data.audiobookId,
+            timestamp: new Date().toISOString(),
+         }));
+
+         const published = this.channel.publish(
+            'chapters',
+            routingKey,
+            message,
+            {
+               persistent: true,
+               messageId: `chapter-gating-${data.chapterId}-${Date.now()}`,
+            },
+         );
+
+         if (published) {
+            rabbitmqLogger.info(
+               { chapterId: data.chapterId, audiobookId: data.audiobookId, routingKey },
+               'Chapter gating changed event published',
+            );
+            return true;
+         }
+
+         rabbitmqLogger.error('Failed to publish chapter gating changed event - channel buffer full');
+         return false;
+      } catch (error) {
+         rabbitmqLogger.error({ err: error, chapterId: data.chapterId }, 'Error publishing chapter gating changed event');
+         return false;
+      }
+   }
+
+   /**
+    * Consume chapter transcoding completed messages (streaming-service → app-service)
+    */
+   public async consumeChapterTranscodingCompletedMessages(
+      onMessage: (message: ChapterTranscodingCompletedMessage) => Promise<void>,
+   ): Promise<void> {
+      if (!this.channel) {
+         throw new Error('Channel not available');
+      }
+
+      const queuePrefix = config.RABBITMQ_QUEUE_PREFIX;
+      const queueName = `${queuePrefix}.chapters.transcoding.completed`;
+
+      try {
+         await this.channel.consume(queueName, async (msg) => {
+            if (!msg) {
+               return;
+            }
+
+            try {
+               const messageContent = JSON.parse(msg.content.toString()) as ChapterTranscodingCompletedMessage;
+               rabbitmqLogger.info(
+                  { chapterId: messageContent.chapterId, audiobookId: messageContent.audiobookId },
+                  'Received chapter transcoding completed message',
+               );
+
+               await onMessage(messageContent);
+
+               this.channel!.ack(msg);
+               rabbitmqLogger.info(
+                  { chapterId: messageContent.chapterId },
+                  'Processed chapter transcoding completed message',
+               );
+            } catch (error: any) {
+               rabbitmqLogger.error({ err: error }, 'Error processing chapter transcoding completed message');
+               this.channel!.ack(msg);
+            }
+         }, {
+            noAck: false,
+         });
+
+         rabbitmqLogger.info({ queueName }, 'Started consuming chapter transcoding completed messages');
+      } catch (error: any) {
+         rabbitmqLogger.error({ err: error }, 'Error setting up chapter transcoding completed consumer');
+         throw error;
+      }
+   }
+
+   /**
+    * Stop consuming chapter transcoding completed messages
+    */
+   public async stopConsumingChapterTranscodingCompletedMessages(): Promise<void> {
+      if (!this.channel) {
+         return;
+      }
+
+      const queuePrefix = config.RABBITMQ_QUEUE_PREFIX;
+      const queueName = `${queuePrefix}.chapters.transcoding.completed`;
+
+      try {
+         await this.channel.cancel(queueName);
+         rabbitmqLogger.info({ queueName }, 'Stopped consuming chapter transcoding completed messages');
+      } catch (error: any) {
+         rabbitmqLogger.error({ err: error }, 'Error stopping chapter transcoding completed consumer');
       }
    }
 
@@ -590,9 +741,9 @@ export class RabbitMQConnection {
    }
 
    /**
-    * Consume author creation messages
+    * Consume subscription changed messages
     */
-   public async consumeAuthorCreationMessages(
+   public async consumeSubscriptionChangedMessages(
       onMessage: (message: any) => Promise<void>
    ): Promise<void> {
       if (!this.channel) {
@@ -600,7 +751,7 @@ export class RabbitMQConnection {
       }
 
       const queuePrefix = config.RABBITMQ_QUEUE_PREFIX;
-      const queueName = `${queuePrefix}.authors.created`;
+      const queueName = `${queuePrefix}.users.subscription.changed`;
 
       try {
          await this.channel.consume(queueName, async (msg) => {
@@ -610,43 +761,110 @@ export class RabbitMQConnection {
 
             try {
                const messageContent = JSON.parse(msg.content.toString());
-               rabbitmqLogger.info({ messageContent }, 'Received author creation message');
+               rabbitmqLogger.info({ messageContent }, 'Received subscription changed message');
 
                await onMessage(messageContent);
 
                this.channel!.ack(msg);
-               rabbitmqLogger.info({ userId: messageContent.userId }, 'Processed author creation message');
+               rabbitmqLogger.info(
+                  { userId: messageContent.userId, subscriptionId: messageContent.subscriptionId },
+                  'Processed subscription changed message',
+               );
             } catch (error: any) {
-               rabbitmqLogger.error({ err: error }, 'Error processing author creation message');
+               rabbitmqLogger.error({ err: error }, 'Error processing subscription changed message');
                this.channel!.ack(msg);
             }
          }, {
             noAck: false
          });
 
-         rabbitmqLogger.info({ queueName }, 'Started consuming author creation messages from queue');
+         rabbitmqLogger.info({ queueName }, 'Started consuming subscription changed messages from queue');
       } catch (error: any) {
-         rabbitmqLogger.error({ err: error }, 'Error setting up author creation message consumer');
+         rabbitmqLogger.error({ err: error }, 'Error setting up subscription changed message consumer');
          throw error;
       }
    }
 
    /**
-    * Stop consuming author creation messages
+    * Stop consuming subscription changed messages
     */
-   public async stopConsumingAuthorCreationMessages(): Promise<void> {
+   public async stopConsumingSubscriptionChangedMessages(): Promise<void> {
       if (!this.channel) {
          return;
       }
 
       const queuePrefix = config.RABBITMQ_QUEUE_PREFIX;
-      const queueName = `${queuePrefix}.authors.created`;
+      const queueName = `${queuePrefix}.users.subscription.changed`;
 
       try {
          await this.channel.cancel(queueName);
-         rabbitmqLogger.info({ queueName }, 'Stopped consuming author creation messages from queue');
+         rabbitmqLogger.info({ queueName }, 'Stopped consuming subscription changed messages from queue');
       } catch (error: any) {
-         rabbitmqLogger.error({ err: error }, 'Error stopping author creation message consumer');
+         rabbitmqLogger.error({ err: error }, 'Error stopping subscription changed message consumer');
+      }
+   }
+
+   /**
+    * Consume subscription gating changed messages (plan tier definition changes from auth)
+    */
+   public async consumeSubscriptionGatingChangedMessages(
+      onMessage: (message: any) => Promise<void>
+   ): Promise<void> {
+      if (!this.channel) {
+         throw new Error('Channel not available');
+      }
+
+      const queuePrefix = config.RABBITMQ_QUEUE_PREFIX;
+      const queueName = `${queuePrefix}.subscription.gating.changed`;
+
+      try {
+         await this.channel.consume(queueName, async (msg) => {
+            if (!msg) {
+               return;
+            }
+
+            try {
+               const messageContent = JSON.parse(msg.content.toString());
+               rabbitmqLogger.info({ messageContent }, 'Received subscription gating changed message');
+
+               await onMessage(messageContent);
+
+               this.channel!.ack(msg);
+               rabbitmqLogger.info(
+                  { planId: messageContent.planId },
+                  'Processed subscription gating changed message',
+               );
+            } catch (error: any) {
+               rabbitmqLogger.error({ err: error }, 'Error processing subscription gating changed message');
+               this.channel!.ack(msg);
+            }
+         }, {
+            noAck: false
+         });
+
+         rabbitmqLogger.info({ queueName }, 'Started consuming subscription gating changed messages from queue');
+      } catch (error: any) {
+         rabbitmqLogger.error({ err: error }, 'Error setting up subscription gating changed message consumer');
+         throw error;
+      }
+   }
+
+   /**
+    * Stop consuming subscription gating changed messages
+    */
+   public async stopConsumingSubscriptionGatingChangedMessages(): Promise<void> {
+      if (!this.channel) {
+         return;
+      }
+
+      const queuePrefix = config.RABBITMQ_QUEUE_PREFIX;
+      const queueName = `${queuePrefix}.subscription.gating.changed`;
+
+      try {
+         await this.channel.cancel(queueName);
+         rabbitmqLogger.info({ queueName }, 'Stopped consuming subscription gating changed messages from queue');
+      } catch (error: any) {
+         rabbitmqLogger.error({ err: error }, 'Error stopping subscription gating changed message consumer');
       }
    }
 

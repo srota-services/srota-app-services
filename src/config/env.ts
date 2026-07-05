@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
+import { resolveStreamingServiceStoragePath as resolveStreamingStoragePath } from '../utils/streamingStoragePath';
 
 const LOCALHOST_PATTERN = /localhost|127\.0\.0\.1/i;
 
@@ -122,26 +123,23 @@ function validateNoLocalhostInStagingOrProduction(
 
 function resolveStreamingServiceStoragePath(currentNodeEnv: string): string {
    const raw = process.env['STREAMING_SERVICE_STORAGE_PATH'];
-   const siblingFallback = path.resolve(process.cwd(), '../streaming-service/storage');
+   const resolved = resolveStreamingStoragePath(process.cwd(), currentNodeEnv, raw);
 
-   if (currentNodeEnv === 'development') {
-      if (!raw) {
-         return siblingFallback;
-      }
-      const resolved = path.isAbsolute(raw) ? raw : path.resolve(process.cwd(), raw);
-      if (!fs.existsSync(resolved) && fs.existsSync(siblingFallback)) {
+   if (currentNodeEnv === 'development' && raw) {
+      const explicit = path.isAbsolute(raw) ? raw : path.resolve(process.cwd(), raw);
+      const legacySibling = path.resolve(process.cwd(), '../streaming-service/storage');
+      if (explicit === legacySibling && resolved !== explicit) {
          console.warn(
-            `[config] STREAMING_SERVICE_STORAGE_PATH not found at ${resolved}; using ${siblingFallback}`,
+            `[config] STREAMING_SERVICE_STORAGE_PATH points to legacy ${explicit}; using ${resolved}`,
          );
-         return siblingFallback;
+      } else if (explicit !== resolved && !fs.existsSync(explicit)) {
+         console.warn(
+            `[config] STREAMING_SERVICE_STORAGE_PATH not found at ${explicit}; using ${resolved}`,
+         );
       }
-      return resolved;
    }
 
-   if (!raw) {
-      throw new Error('Missing required environment variable: STREAMING_SERVICE_STORAGE_PATH');
-   }
-   return path.isAbsolute(raw) ? raw : path.resolve(process.cwd(), raw);
+   return resolved;
 }
 
 loadEnvFiles();

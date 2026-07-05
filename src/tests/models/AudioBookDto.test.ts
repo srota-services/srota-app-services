@@ -23,18 +23,27 @@ describe('AudioBookDto', () => {
          coverImage: 'https://example.com/cover.jpg',
          ownerType: 'ORGANIZATION' as const,
          ownerId: 'org-1',
-         language: 'en',
+         languageId: 'lang-en',
+         language: {
+            id: 'lang-en',
+            name: 'English',
+            code: 'en',
+            createdAt: new Date('2024-01-01'),
+            updatedAt: new Date('2024-01-02'),
+         },
          publisher: 'Test Publisher',
          publishDate: new Date('2024-01-01'),
          isbn: '1234567890123',
          isActive: true,
          isPublic: true,
+         subscriptionGatingMode: 'NONE' as const,
          minSubscriptionTier: null,
          isOfflineAvailable: false,
          createdAt: new Date('2024-01-01'),
          updatedAt: new Date('2024-01-02'),
          scheduledAt: null,
          moodId: null,
+         type: 'PUBLICATION' as const,
          audiobookTags: [],
          audioBookGenres: [],
          ...overrides,
@@ -49,6 +58,7 @@ describe('AudioBookDto', () => {
 
          expect(result.id).toBe(prismaAudioBook.id);
          expect(result.title).toBe(prismaAudioBook.title);
+         expect(result.type).toBe('PUBLICATION');
          expect(result.author).toBe(prismaAudioBook.author);
          expect(result.owner).toEqual({ type: 'ORGANIZATION', id: 'org-1' });
       });
@@ -114,7 +124,48 @@ describe('AudioBookDto', () => {
 
          const result = toAudioBookDto(prismaAudioBook);
 
-         expect(result.genres?.[0]?.name).toBe('Fantasy');
+         expect(result.type).toBe('PUBLICATION');
+         if (result.type === 'PUBLICATION') {
+            expect(result.genres?.[0]?.name).toBe('Fantasy');
+         }
+      });
+
+      it('maps authoring audiobook without publication metadata', () => {
+         const prismaAudioBook = createMockPrismaAudioBook({
+            type: 'AUTHORING' as const,
+         });
+
+         const result = toAudioBookDto(prismaAudioBook);
+
+         expect(result.type).toBe('AUTHORING');
+         expect('subscriptionGatingMode' in result).toBe(false);
+         expect('genres' in result).toBe(false);
+      });
+
+      it('includes moodId and nested mood for publication audiobooks', () => {
+         const prismaAudioBook = createMockPrismaAudioBook({
+            moodId: 'cmood1234567890abcdefghij',
+            mood: {
+               id: 'cmood1234567890abcdefghij',
+               name: 'Happy',
+               description: 'Uplifting listens',
+               purpose: '',
+               descriptionIcon: 'sparkle',
+               hexcode: '#FFD700',
+               icon: 'happy',
+               createdAt: new Date('2024-01-01'),
+               updatedAt: new Date('2024-01-02'),
+            },
+         });
+
+         const result = toAudioBookDto(prismaAudioBook);
+
+         expect(result.type).toBe('PUBLICATION');
+         if (result.type === 'PUBLICATION') {
+            expect(result.moodId).toBe('cmood1234567890abcdefghij');
+            expect(result.mood?.name).toBe('Happy');
+            expect(result.mood?.hexcode).toBe('#FFD700');
+         }
       });
    });
 
@@ -137,7 +188,7 @@ describe('AudioBookDto', () => {
             owner: { type: 'AUTHOR', id: 'author-id' },
             narrator: 'Narrator Name',
             genreIds: ['genre-id'],
-            language: 'en',
+            languageId: 'lang-en',
          };
 
          expect(createDto.owner.type).toBe('AUTHOR');

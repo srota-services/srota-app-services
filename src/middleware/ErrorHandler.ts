@@ -6,7 +6,7 @@ import { Request, Response, NextFunction } from 'express';
 import { ResponseHandler } from '../utils/ResponseHandler';
 import { ApiError } from '../types/ApiError';
 import { MessageHandler } from '../utils/MessageHandler';
-import { logger, errorLogger } from '../config/logger';
+import { logger } from '../config/logger';
 
 export class ErrorHandler {
   /**
@@ -26,10 +26,9 @@ export class ErrorHandler {
       statusCode: error instanceof ApiError ? error.statusCode : 500,
     };
 
-    // Log to error logger (error.log file)
-    errorLogger.error(errorContext, 'Error handled by ErrorHandler');
+    (res.locals as { apiError?: Error | ApiError }).apiError = error;
 
-    // Also log to main logger with appropriate level
+    // Log to main logger with appropriate level (error.log via apiErrorLogMiddleware + multistream)
     if (error instanceof ApiError && error.statusCode < 500) {
       logger.warn(errorContext, 'Client error');
     } else {
@@ -71,7 +70,7 @@ export class ErrorHandler {
     }
 
     // Handle default errors
-    ResponseHandler.internalError(res, error.message);
+    ResponseHandler.internalError(res, MessageHandler.getErrorMessage('internal.default'));
   }
 
   /**

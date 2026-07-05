@@ -13,6 +13,7 @@ import { ApiError } from '../types/ApiError';
 import { MessageHandler } from '../utils/MessageHandler';
 import { HttpStatusCode, ErrorType } from '../types/common';
 import { emitCacheInvalidation } from './DomainEventPublisher';
+import { runWrite } from '../utils/prismaTransaction';
 
 export class ReviewService {
    constructor(private prisma: PrismaClient) {}
@@ -27,7 +28,7 @@ export class ReviewService {
       }
    }
 
-   async createReview(userProfileId: string, data: CreateReviewRequest): Promise<ReviewDto> {
+   async createReview(userId: string, data: CreateReviewRequest): Promise<ReviewDto> {
       this.validateRating(data.rating);
 
       const audiobook = await this.prisma.audioBook.findUnique({
@@ -43,8 +44,8 @@ export class ReviewService {
 
       const existing = await this.prisma.review.findUnique({
          where: {
-            userProfileId_audiobookId: {
-               userProfileId,
+            userId_audiobookId: {
+               userId,
                audiobookId: data.audiobookId,
             },
          },
@@ -57,13 +58,15 @@ export class ReviewService {
          );
       }
 
-      const review = await this.prisma.review.create({
-         data: {
-            userProfileId,
-            audiobookId: data.audiobookId,
-            rating: data.rating,
-         },
-      });
+      const review = await runWrite(this.prisma, async (tx) =>
+         tx.review.create({
+            data: {
+               userId,
+               audiobookId: data.audiobookId,
+               rating: data.rating,
+            },
+         }),
+      );
 
       emitCacheInvalidation('review', 'created', review.id, { audiobookId: data.audiobookId });
       return toReviewDto(review);
@@ -78,7 +81,7 @@ export class ReviewService {
 
       const where: Prisma.ReviewWhereInput = {};
       if (query.audiobookId) where.audiobookId = query.audiobookId;
-      if (query.userProfileId) where.userProfileId = query.userProfileId;
+      if (query.userId) where.userId = query.userId;
 
       const [reviews, totalCount] = await Promise.all([
          this.prisma.review.findMany({
@@ -110,7 +113,7 @@ export class ReviewService {
 
    async updateReview(
       id: string,
-      userProfileId: string,
+      userId: string,
       data: UpdateReviewRequest
    ): Promise<ReviewDto> {
       this.validateRating(data.rating);
@@ -123,20 +126,22 @@ export class ReviewService {
             ErrorType.NOT_FOUND
          );
       }
-      if (existing.userProfileId !== userProfileId) {
+      if (existing.userId !== userId) {
          throw ApiError.forbidden(MessageHandler.getErrorMessage('reviews.access_denied'));
       }
 
-      const updated = await this.prisma.review.update({
-         where: { id },
-         data: { rating: data.rating },
-      });
+      const updated = await runWrite(this.prisma, async (tx) =>
+         tx.review.update({
+            where: { id },
+            data: { rating: data.rating },
+         }),
+      );
 
       emitCacheInvalidation('review', 'updated', id, { audiobookId: existing.audiobookId });
       return toReviewDto(updated);
    }
 
-   async deleteReview(id: string, userProfileId: string): Promise<void> {
+   async deleteReview(id: string, userId: string): Promise<void> {
       const existing = await this.prisma.review.findUnique({ where: { id } });
       if (!existing) {
          throw new ApiError(
@@ -145,11 +150,11 @@ export class ReviewService {
             ErrorType.NOT_FOUND
          );
       }
-      if (existing.userProfileId !== userProfileId) {
+      if (existing.userId !== userId) {
          throw ApiError.forbidden(MessageHandler.getErrorMessage('reviews.access_denied'));
       }
 
-      await this.prisma.review.delete({ where: { id } });
+      await runWrite(this.prisma, async (tx) => tx.review.delete({ where: { id } }));
       emitCacheInvalidation('review', 'deleted', id, { audiobookId: existing.audiobookId });
    }
 }

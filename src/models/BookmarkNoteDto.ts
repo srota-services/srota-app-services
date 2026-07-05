@@ -15,7 +15,7 @@ export interface BookmarkChapterSummary {
 
 export interface BookmarkData {
    id: string;
-   userProfileId: string;
+   userId: string;
    chapterId: string;
    createdAt: Date;
    updatedAt: Date;
@@ -56,7 +56,7 @@ export const bookmarkChapterInclude = {
 export function toBookmarkDto(bookmark: BookmarkWithChapter): BookmarkWithRelations {
    const dto: BookmarkWithRelations = {
       id: bookmark.id,
-      userProfileId: bookmark.userProfileId,
+      userId: bookmark.userId,
       chapterId: bookmark.chapterId,
       createdAt: bookmark.createdAt,
       updatedAt: bookmark.updatedAt,
@@ -73,7 +73,7 @@ export function toBookmarkDto(bookmark: BookmarkWithChapter): BookmarkWithRelati
 
 export interface NoteData {
    id: string;
-   userProfileId: string;
+   userId: string;
    audiobookId?: string;
    chapterId?: string;
    title?: string;

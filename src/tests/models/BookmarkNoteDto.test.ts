@@ -21,7 +21,7 @@ describe('BookmarkNoteDto', () => {
    const createMockBookmarkData = (overrides = {}): BookmarkData => {
       return {
          id: 'bookmark-id',
-         userProfileId: 'user-id',
+         userId: 'user-id',
          chapterId: 'chapter-id',
          createdAt: new Date('2024-01-01'),
          updatedAt: new Date('2024-01-02'),
@@ -46,7 +46,7 @@ describe('BookmarkNoteDto', () => {
    const createMockNoteData = (overrides = {}): NoteData => {
       return {
          id: 'note-id',
-         userProfileId: 'user-id',
+         userId: 'user-id',
          audiobookId: 'audiobook-id',
          chapterId: 'chapter-id',
          title: 'My Note',
@@ -82,7 +82,7 @@ describe('BookmarkNoteDto', () => {
          const bookmark = createMockBookmarkData();
 
          expect(bookmark.id).toBe('bookmark-id');
-         expect(bookmark.userProfileId).toBe('user-id');
+         expect(bookmark.userId).toBe('user-id');
          expect(bookmark.chapterId).toBe('chapter-id');
          expect(bookmark.createdAt).toBeInstanceOf(Date);
          expect(bookmark.updatedAt).toBeInstanceOf(Date);
@@ -121,7 +121,7 @@ describe('BookmarkNoteDto', () => {
       it('should map prisma bookmark with chapter', () => {
          const dto = toBookmarkDto({
             id: 'bookmark-id',
-            userProfileId: 'user-id',
+            userId: 'user-id',
             chapterId: 'chapter-id',
             createdAt: new Date('2024-01-01'),
             updatedAt: new Date('2024-01-02'),
@@ -150,7 +150,7 @@ describe('BookmarkNoteDto', () => {
       it('should handle optional fields', () => {
          const minimalNote: NoteData = {
             id: 'note-id',
-            userProfileId: 'user-id',
+            userId: 'user-id',
             content: 'Required content',
             timestamp: new Date(),
             createdAt: new Date(),

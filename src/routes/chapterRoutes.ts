@@ -39,11 +39,18 @@ export function createChapterRoutes(prisma: PrismaClient): Router {
       chapterController.getChapterById
    );
 
+   // Stream subscription gating context (used by streaming-service)
+   router.get(
+      '/chapters/:id/stream-gating',
+      ValidationMiddleware.validateId,
+      chapterController.getChapterStreamGating
+   );
+
    // Create new chapter
    router.post(
       '/chapters',
       requireContentCreator(),
-      UploadMiddleware.handleImageAndAudioUpload,
+      UploadMiddleware.handleChapterCreateUpload,
       ValidationMiddleware.validateChapterCreation,
       chapterController.createChapter
    );
@@ -53,8 +60,8 @@ export function createChapterRoutes(prisma: PrismaClient): Router {
       '/chapters/:id',
       requireContentManager(),
       ValidationMiddleware.validateId,
-      UploadMiddleware.handleImageUpload,
-      UploadMiddleware.handleAudioUpload,
+      UploadMiddleware.handleOptionalImageAndAudioUpload,
+      ValidationMiddleware.validateChapterUpdate,
       chapterController.updateChapter
    );
 

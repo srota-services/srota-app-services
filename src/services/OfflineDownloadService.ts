@@ -15,6 +15,9 @@ import { BackgroundJobService } from './BackgroundJobService';
 import { emitCacheInvalidation } from './DomainEventPublisher';
 import { ApiError } from '../types/ApiError';
 import { fileUrlService } from './FileUrlService';
+import { runWrite } from '../utils/prismaTransaction';
+import { rethrowServiceError } from '../utils/serviceError';
+import { MessageHandler } from '../utils/MessageHandler';
 
 export class OfflineDownloadService {
    private backgroundJobService: BackgroundJobService;
@@ -26,7 +29,7 @@ export class OfflineDownloadService {
    /**
     * Request an offline download
     */
-   async requestDownload(userProfileId: string, downloadRequest: DownloadRequest): Promise<OfflineDownloadData> {
+   async requestDownload(userId: string, downloadRequest: DownloadRequest): Promise<OfflineDownloadData> {
       try {
          // Check if audiobook exists and is available for offline download
          const audiobook = await this.prisma.audioBook.findUnique({
@@ -44,8 +47,8 @@ export class OfflineDownloadService {
          // Check if user already has a download for this audiobook
          const existingDownload = await this.prisma.offlineDownload.findUnique({
             where: {
-               userProfileId_audiobookId: {
-                  userProfileId,
+               userId_audiobookId: {
+                  userId,
                   audiobookId: downloadRequest.audiobookId,
                },
             },
@@ -62,18 +65,20 @@ export class OfflineDownloadService {
          }
 
          // Create download record
-         const download = await this.prisma.offlineDownload.create({
-            data: {
-               userProfileId,
-               audiobookId: downloadRequest.audiobookId,
-               status: 'PENDING',
-               progress: 0,
-            },
-         });
+         const download = await runWrite(this.prisma, async (tx) =>
+            tx.offlineDownload.create({
+               data: {
+                  userId,
+                  audiobookId: downloadRequest.audiobookId,
+                  status: 'PENDING',
+                  progress: 0,
+               },
+            }),
+         );
 
          // Schedule download job
          await this.backgroundJobService.scheduleOfflineDownload(
-            userProfileId,
+            userId,
             downloadRequest.audiobookId,
             download.id,
             downloadRequest.quality
@@ -82,7 +87,7 @@ export class OfflineDownloadService {
          emitCacheInvalidation('offline-download', 'created', download.id);
          return {
             id: download.id,
-            userProfileId: download.userProfileId,
+            userId: download.userId,
             audiobookId: download.audiobookId,
             status: download.status,
             progress: download.progress,
@@ -105,12 +110,12 @@ export class OfflineDownloadService {
    /**
     * Get download progress
     */
-   async getDownloadProgress(userProfileId: string, downloadId: string): Promise<DownloadProgress> {
+   async getDownloadProgress(userId: string, downloadId: string): Promise<DownloadProgress> {
       try {
          const download = await this.prisma.offlineDownload.findFirst({
             where: {
                id: downloadId,
-               userProfileId,
+               userId,
             },
             include: {
                audiobook: {
@@ -135,7 +140,7 @@ export class OfflineDownloadService {
 
          const downloadData = {
             id: download.id,
-            userProfileId: download.userProfileId,
+            userId: download.userId,
             audiobookId: download.audiobookId,
             status: download.status,
             progress: download.progress,
@@ -171,9 +176,9 @@ export class OfflineDownloadService {
    /**
     * Get all downloads for a user
     */
-   async getUserDownloads(userProfileId: string, status?: DownloadStatus): Promise<OfflineDownloadWithRelations[]> {
+   async getUserDownloads(userId: string, status?: DownloadStatus): Promise<OfflineDownloadWithRelations[]> {
       try {
-         const whereClause: any = { userProfileId };
+         const whereClause: any = { userId };
          if (status) {
             whereClause.status = status;
          }
@@ -196,15 +201,15 @@ export class OfflineDownloadService {
          });
 
          return Promise.all(downloads.map(download => this.mapOfflineDownloadWithRelations(download)));
-      } catch (_error) {
-         throw new ApiError('Failed to retrieve user downloads', 500);
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'getUserDownloads' }, MessageHandler.getErrorMessage('internal.default'));
       }
    }
 
    private async mapOfflineDownloadWithRelations(
       download: {
          id: string;
-         userProfileId: string;
+         userId: string;
          audiobookId: string;
          status: DownloadStatus;
          progress: number;
@@ -232,7 +237,7 @@ export class OfflineDownloadService {
 
       return {
          id: download.id,
-         userProfileId: download.userProfileId,
+         userId: download.userId,
          audiobookId: download.audiobookId,
          status: download.status,
          progress: download.progress,
@@ -258,12 +263,12 @@ export class OfflineDownloadService {
    /**
     * Cancel a download
     */
-   async cancelDownload(userProfileId: string, downloadId: string): Promise<void> {
+   async cancelDownload(userId: string, downloadId: string): Promise<void> {
       try {
          const download = await this.prisma.offlineDownload.findFirst({
             where: {
                id: downloadId,
-               userProfileId,
+               userId,
             },
          });
 
@@ -279,12 +284,14 @@ export class OfflineDownloadService {
             throw new ApiError('Download is already cancelled', 400);
          }
 
-         await this.prisma.offlineDownload.update({
-            where: { id: downloadId },
-            data: {
-               status: 'CANCELLED',
-            },
-         });
+         await runWrite(this.prisma, async (tx) =>
+            tx.offlineDownload.update({
+               where: { id: downloadId },
+               data: {
+                  status: 'CANCELLED',
+               },
+            }),
+         );
       } catch (error) {
          if (error instanceof ApiError) {
             throw error;
@@ -296,12 +303,12 @@ export class OfflineDownloadService {
    /**
     * Delete a completed download
     */
-   async deleteDownload(userProfileId: string, downloadId: string): Promise<void> {
+   async deleteDownload(userId: string, downloadId: string): Promise<void> {
       try {
          const download = await this.prisma.offlineDownload.findFirst({
             where: {
                id: downloadId,
-               userProfileId,
+               userId,
             },
          });
 
@@ -319,9 +326,11 @@ export class OfflineDownloadService {
             console.log(`Would delete file: ${download.filePath}`);
          }
 
-         await this.prisma.offlineDownload.delete({
-            where: { id: downloadId },
-         });
+         await runWrite(this.prisma, async (tx) =>
+            tx.offlineDownload.delete({
+               where: { id: downloadId },
+            }),
+         );
          emitCacheInvalidation('offline-download', 'deleted', downloadId);
       } catch (error) {
          if (error instanceof ApiError) {
@@ -334,12 +343,12 @@ export class OfflineDownloadService {
    /**
     * Retry a failed download
     */
-   async retryDownload(userProfileId: string, downloadId: string): Promise<void> {
+   async retryDownload(userId: string, downloadId: string): Promise<void> {
       try {
          const download = await this.prisma.offlineDownload.findFirst({
             where: {
                id: downloadId,
-               userProfileId,
+               userId,
             },
          });
 
@@ -356,19 +365,21 @@ export class OfflineDownloadService {
          }
 
          // Reset download status
-         await this.prisma.offlineDownload.update({
-            where: { id: downloadId },
-            data: {
-               status: 'PENDING',
-               progress: 0,
-               errorMessage: null,
-               retryCount: download.retryCount + 1,
-            },
-         });
+         await runWrite(this.prisma, async (tx) =>
+            tx.offlineDownload.update({
+               where: { id: downloadId },
+               data: {
+                  status: 'PENDING',
+                  progress: 0,
+                  errorMessage: null,
+                  retryCount: download.retryCount + 1,
+               },
+            }),
+         );
 
          // Schedule retry
          await this.backgroundJobService.scheduleOfflineDownload(
-            userProfileId,
+            userId,
             download.audiobookId,
             downloadId,
             undefined,
@@ -403,8 +414,8 @@ export class OfflineDownloadService {
             failed,
             total,
          };
-      } catch (_error) {
-         throw new ApiError('Failed to retrieve download queue status', 500);
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'getDownloadQueueStatus' }, MessageHandler.getErrorMessage('internal.default'));
       }
    }
 
@@ -453,8 +464,8 @@ export class OfflineDownloadService {
                count: d._count.status,
             })),
          };
-      } catch (_error) {
-         throw new ApiError('Failed to retrieve download statistics', 500);
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'getDownloadStats' }, MessageHandler.getErrorMessage('internal.default'));
       }
    }
 
@@ -463,12 +474,14 @@ export class OfflineDownloadService {
     */
    async updateOfflineAvailability(audiobookId: string, isAvailable: boolean): Promise<void> {
       try {
-         await this.prisma.audioBook.update({
-            where: { id: audiobookId },
-            data: { isOfflineAvailable: isAvailable },
-         });
-      } catch (_error) {
-         throw new ApiError('Failed to update offline availability', 500);
+         await runWrite(this.prisma, async (tx) =>
+            tx.audioBook.update({
+               where: { id: audiobookId },
+               data: { isOfflineAvailable: isAvailable },
+            }),
+         );
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'updateOfflineAvailability' }, MessageHandler.getErrorMessage('internal.default'));
       }
    }
 

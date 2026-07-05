@@ -2,7 +2,7 @@
  * Mood DTO (Data Transfer Object) classes
  */
 import { Mood as PrismaMood, MoodAttribute as PrismaMoodAttribute } from '@prisma/client';
-import { AudioBookDto } from './AudioBookDto';
+import type { AudioBookDto } from './AudioBookDto';
 
 export interface MoodAttributeDto {
    id: string;
@@ -73,8 +73,8 @@ export function toMoodAttributeDto(attribute: PrismaMoodAttribute): MoodAttribut
    };
 }
 
-export function toMoodDto(mood: MoodWithAttributes, includeDetail = false): MoodSummaryDto | MoodDetailDto {
-   const base: MoodSummaryDto = {
+export function toMoodSummaryDto(mood: PrismaMood): MoodSummaryDto {
+   return {
       id: mood.id,
       name: mood.name,
       description: mood.description,
@@ -82,8 +82,12 @@ export function toMoodDto(mood: MoodWithAttributes, includeDetail = false): Mood
       hexcode: mood.hexcode,
       icon: mood.icon,
       createdAt: mood.createdAt,
-      updatedAt: mood.updatedAt
+      updatedAt: mood.updatedAt,
    };
+}
+
+export function toMoodDto(mood: MoodWithAttributes, includeDetail = false): MoodSummaryDto | MoodDetailDto {
+   const base = toMoodSummaryDto(mood);
 
    if (!includeDetail) {
       return base;

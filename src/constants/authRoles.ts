@@ -4,6 +4,7 @@ export const AuthRole = {
    ORG_ADMIN: 'ORG_ADMIN',
    ORG_COORDINATOR: 'ORG_COORDINATOR',
    AUTHOR: 'AUTHOR',
+   GUEST: 'GUEST',
 } as const;
 
 export type AuthRoleValue = (typeof AuthRole)[keyof typeof AuthRole];
@@ -19,7 +20,15 @@ export const AuthRoleGroups = {
       AuthRole.ORG_COORDINATOR,
       AuthRole.AUTHOR,
    ],
+   ALL_REGISTERED: [
+      AuthRole.LISTENER,
+      AuthRole.GLOBAL_ADMIN,
+      AuthRole.ORG_ADMIN,
+      AuthRole.ORG_COORDINATOR,
+      AuthRole.AUTHOR,
+   ],
    ALL_AUTHENTICATED: [
+      AuthRole.GUEST,
       AuthRole.LISTENER,
       AuthRole.GLOBAL_ADMIN,
       AuthRole.ORG_ADMIN,
@@ -59,5 +68,25 @@ export function isContentManagerRole(role: string | undefined): boolean {
    const normalized = normalizeAuthRole(role);
    return AuthRoleGroups.CONTENT_MANAGER.some(
       (allowed) => normalizeAuthRole(allowed) === normalized,
+   );
+}
+
+export function isGuestRole(role: string | undefined): boolean {
+   return normalizeAuthRole(role) === normalizeAuthRole(AuthRole.GUEST);
+}
+
+export function isRegisteredUserRole(role: string | undefined): boolean {
+   const normalized = normalizeAuthRole(role);
+   return AuthRoleGroups.ALL_REGISTERED.some(
+      (allowed) => normalizeAuthRole(allowed) === normalized,
+   );
+}
+
+/** Active subscription tier checks apply to LISTENER and GUEST only. */
+export function isSubscriptionGatingEnforcedRole(role: string | undefined): boolean {
+   const normalized = normalizeAuthRole(role);
+   return (
+      normalized === normalizeAuthRole(AuthRole.LISTENER) ||
+      normalized === normalizeAuthRole(AuthRole.GUEST)
    );
 }

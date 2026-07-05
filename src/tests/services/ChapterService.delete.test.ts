@@ -6,6 +6,7 @@ import { ChapterService } from '../../services/ChapterService';
 import { RabbitMQFactory } from '../../config/rabbitmq';
 import { mediaCleanupService } from '../../services/MediaCleanupService';
 import { ImageAssetService } from '../../services/ImageAssetService';
+import { attachPrismaTransaction } from '../helpers/prismaMock';
 
 jest.mock('../../config/rabbitmq');
 jest.mock('../../services/MediaCleanupService', () => ({
@@ -42,12 +43,12 @@ describe('ChapterService.deleteChapter', () => {
       });
       mockDelete.mockResolvedValue(undefined);
 
-      const prisma = {
+      const prisma = attachPrismaTransaction({
          chapter: {
             findUnique: mockFindUnique,
             delete: mockDelete,
          },
-      } as unknown as ConstructorParameters<typeof ChapterService>[0];
+      }) as unknown as ConstructorParameters<typeof ChapterService>[0];
 
       const service = new ChapterService(prisma);
       await service.deleteChapter('chapter-1');

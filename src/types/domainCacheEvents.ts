@@ -5,8 +5,6 @@ export type AppDomainResource =
    | 'chapter'
    | 'comment'
    | 'review'
-   | 'user-profile'
-   | 'author-profile'
    | 'playlist'
    | 'playlist-item'
    | 'favorite'
@@ -14,8 +12,11 @@ export type AppDomainResource =
    | 'note'
    | 'tag'
    | 'genre'
+   | 'language'
    | 'mood'
    | 'user-audiobook'
+   | 'subscription-catalog'
+   | 'subscription-gating'
    | 'offline-download';
 
 export interface CacheInvalidateEvent {

@@ -41,11 +41,7 @@ describe('AudioBookController', () => {
    };
 
    beforeEach(() => {
-      mockPrisma = {
-         userProfile: {
-            findUnique: jest.fn().mockResolvedValue({ id: 'profile-1' })
-         }
-      } as unknown as PrismaClient;
+      mockPrisma = {} as unknown as PrismaClient;
       mockReq = {
          params: {},
          query: {},
@@ -125,7 +121,7 @@ describe('AudioBookController', () => {
             sortOrder: 'asc',
             genreId: 'genre-123',
             moodId: 'cmood1234567890abcdefghij',
-            language: 'English',
+            languageId: 'cl000000000000000000000002',
             author: 'Test Author',
             narrator: 'Test Narrator',
             isActive: 'true',
@@ -151,7 +147,7 @@ describe('AudioBookController', () => {
                sortOrder: 'asc',
                genreIds: ['genre-123'],
                moodIds: ['cmood1234567890abcdefghij'],
-               language: 'English',
+               languageIds: ['cl000000000000000000000002'],
                author: 'Test Author',
                narrator: 'Test Narrator',
                isActive: true,
@@ -184,7 +180,13 @@ describe('AudioBookController', () => {
    describe('getAudioBookById', () => {
       it('should retrieve audiobook by ID with subscription access', async () => {
          mockReq.params.id = 'book-123';
-         const mockBook = { id: 'book-123', title: 'Test Book', minSubscriptionTier: null };
+         const mockBook = {
+            id: 'book-123',
+            title: 'Test Book',
+            type: 'PUBLICATION',
+            subscriptionGatingMode: 'NONE',
+            minSubscriptionTier: null,
+         };
          const subscriptionAccess = { canAccess: true };
 
          mockAudioBookService.getAudioBookById.mockResolvedValue(mockBook as any);
@@ -200,9 +202,13 @@ describe('AudioBookController', () => {
          expect(mockAudioBookService.getAudioBookById).toHaveBeenCalledWith('book-123', 'test-token');
          expect(mockAudioBookService.getSubscriptionAccessForAudiobook).toHaveBeenCalledWith(
             'book-123',
-            null,
+            {
+               subscriptionGatingMode: 'NONE',
+               minSubscriptionTier: null,
+            },
             'auth-user-1',
-            'test-token'
+            'test-token',
+            AuthRole.AUTHOR,
          );
          expect(mockAudioBookService.getUserReviewRatingForAudiobook).toHaveBeenCalledWith(
             'book-123',
@@ -251,7 +257,7 @@ describe('AudioBookController', () => {
                owner: { type: 'ORGANIZATION', id: 'org-1' },
                genreIds: ['genre-123'],
             }),
-            'profile-1',
+            'auth-user-1',
             'test-token',
             '/uploads/covers/cover.jpg',
          );
@@ -263,16 +269,45 @@ describe('AudioBookController', () => {
          );
       });
 
-      it('should return validation error when cover image is missing', async () => {
+      it('should return validation error when cover image is missing for publication audiobook', async () => {
          mockReq.body = { title: 'Book without Cover', author: 'Author Name' };
+         (MessageHandler.getErrorMessage as jest.Mock).mockReturnValue('Cover image is required for publication audiobooks');
 
          await audioBookController.createAudioBook(mockReq, mockRes, mockReq.next);
 
          expect(ResponseHandler.validationError).toHaveBeenCalledWith(
             mockRes,
-            'Cover image is required'
+            'Cover image is required for publication audiobooks',
          );
          expect(mockAudioBookService.createAudioBook).not.toHaveBeenCalled();
+      });
+
+      it('should create authoring audiobook without cover image', async () => {
+         mockReq.body = {
+            title: 'Draft Book',
+            author: 'Author Name',
+            type: 'AUTHORING',
+            owner: JSON.stringify({ type: 'AUTHOR', id: 'author-1' }),
+         };
+         (mockReq as any).coverImageFile = undefined;
+
+         const mockBook = { id: 'book-authoring', title: 'Draft Book', type: 'AUTHORING' };
+         mockAudioBookService.createAudioBook.mockResolvedValue(mockBook as any);
+         (MessageHandler.getSuccessMessage as jest.Mock).mockReturnValue('Created');
+
+         await audioBookController.createAudioBook(mockReq, mockRes, mockReq.next);
+         await flushPromises();
+
+         expect(mockAudioBookService.createAudioBook).toHaveBeenCalledWith(
+            expect.objectContaining({
+               title: 'Draft Book',
+               type: 'AUTHORING',
+            }),
+            'auth-user-1',
+            'test-token',
+            undefined,
+         );
+         expect(ResponseHandler.success).toHaveBeenCalled();
       });
 
       it('should handle file upload for cover image', async () => {
@@ -296,7 +331,7 @@ describe('AudioBookController', () => {
                author: 'Author Name',
                owner: { type: 'ORGANIZATION', id: 'org-1' },
             }),
-            'profile-1',
+            'auth-user-1',
             'test-token',
             '/uploads/covers/cover.jpg',
          );
@@ -344,7 +379,7 @@ describe('AudioBookController', () => {
          );
          expect(mockAudioBookService.createAudioBook).toHaveBeenCalledWith(
             expect.objectContaining({ owner: { type: 'AUTHOR', id: 'author-1' } }),
-            'profile-1',
+            'auth-author-1',
             'test-token',
             '/uploads/covers/cover.jpg',
          );

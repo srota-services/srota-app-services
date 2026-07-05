@@ -10,7 +10,6 @@ import { getFileUrl } from '../middleware/UploadMiddleware';
 import { StorageFactory } from './storage/StorageFactory';
 import { ImageCategory } from '@prisma/client';
 import { AudioBookDto } from '../models/AudioBookDto';
-import { UserProfileDto } from '../models/UserDto';
 import { ChapterWithRelations } from '../models/ChapterDto';
 import { prisma } from '../lib/prisma';
 import { ImageAssetService } from './ImageAssetService';
@@ -186,9 +185,9 @@ export class FileUrlService {
       const imageAssets = await this.resolveImageAssets('audiobook', dto.id);
       return {
          ...dto,
-         coverImage,
+         ...(coverImage !== undefined ? { coverImage } : {}),
          imageAssets,
-      };
+      } as T & { imageAssets: Record<string, string> };
    }
 
    async resolveAudioBookMediaList<T extends AudioBookDto>(dtos: T[]): Promise<(T & { imageAssets: Record<string, string> })[]> {
@@ -202,12 +201,13 @@ export class FileUrlService {
       ]);
 
       const imageAssets = await this.resolveImageAssets('chapter', chapter.id);
+      const resolvedCover = coverImage ?? chapter.coverImage;
 
       return {
          ...chapter,
-         filePath: filePath ?? chapter.filePath,
-         coverImage: coverImage ?? chapter.coverImage,
+         filePath: (filePath ?? chapter.filePath) ?? null,
          imageAssets,
+         ...(resolvedCover ? { coverImage: resolvedCover } : {}),
       };
    }
 
@@ -237,25 +237,16 @@ export class FileUrlService {
       return { coverImage };
    }
 
-   async resolveUserMedia<T extends Pick<UserProfileDto, 'avatar' | 'id'>>(
-      dto: T,
-   ): Promise<T & { imageAssets: Record<string, string> }> {
-      const avatar = await this.resolveForClient(dto.avatar);
-      const imageAssets = await this.resolveImageAssets('user', dto.id);
-      return {
-         ...dto,
-         avatar,
-         imageAssets,
-      };
-   }
-
-   async resolveCommentUserMedia(profile: {
-      id: string;
-      username: string;
-      avatar: string | null;
-   }): Promise<{ username: string; avatar: string | null; imageAssets: Record<string, string> }> {
+   async resolveCommentUserMedia(
+      _userId: string,
+      profile: {
+         username: string;
+         avatar: string | null;
+         imageAssets?: Record<string, string>;
+      },
+   ): Promise<{ username: string; avatar: string | null; imageAssets: Record<string, string> }> {
       const avatar = (await this.resolveForClient(profile.avatar)) ?? profile.avatar;
-      const imageAssets = await this.resolveImageAssets('user', profile.id);
+      const imageAssets = profile.imageAssets ?? {};
       return {
          username: profile.username,
          avatar,
@@ -275,46 +266,6 @@ export class FileUrlService {
       entityId: string,
    ): Promise<Record<string, string>> {
       return this.resolveImageAssets(category, entityId);
-   }
-
-   private resolveDevAuthorProfileImage(stored: string): string {
-      const key = this.normalizeToS3Key(stored);
-      if (!key) {
-         return stored;
-      }
-
-      const relativeFromUploads = key.startsWith('uploads/') ? key.slice('uploads/'.length) : key;
-      const localFilePath = path.join(path.resolve(config.DEV_UPLOAD_DIR), relativeFromUploads);
-
-      if (fs.existsSync(localFilePath)) {
-         if (stored.startsWith('/uploads/')) {
-            return stored;
-         }
-         return `/${key}`;
-      }
-
-      const urlPath = `/${key}`;
-      return `${config.AUTH_SERVICE_URL.replace(/\/$/, '')}${urlPath}`;
-   }
-
-   async resolveAuthorProfileMedia<T extends { avatar?: string | null; authorId: string }>(
-      dto: T,
-   ): Promise<T & { imageAssets: Record<string, string> }> {
-      let avatar: string | undefined;
-
-      if (dto.avatar) {
-         avatar = this.shouldSignUrls()
-            ? await this.resolveForClient(dto.avatar)
-            : this.resolveDevAuthorProfileImage(dto.avatar);
-      }
-
-      const imageAssets = await this.resolveImageAssets('author', dto.authorId);
-
-      return {
-         ...dto,
-         avatar: avatar ?? dto.avatar ?? null,
-         imageAssets,
-      };
    }
 }
 

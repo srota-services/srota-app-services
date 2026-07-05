@@ -12,11 +12,12 @@ import { ApiError } from '../types/ApiError';
 import { MessageHandler } from '../utils/MessageHandler';
 import { HttpStatusCode, ErrorType } from '../types/common';
 import { emitCacheInvalidation } from './DomainEventPublisher';
+import { runWrite } from '../utils/prismaTransaction';
 
 export class FavoriteService {
    constructor(private prisma: PrismaClient) {}
 
-   async createFavorite(userProfileId: string, data: CreateFavoriteRequest): Promise<FavoriteDto> {
+   async createFavorite(userId: string, data: CreateFavoriteRequest): Promise<FavoriteDto> {
       const audiobook = await this.prisma.audioBook.findUnique({
          where: { id: data.audiobookId },
       });
@@ -30,8 +31,8 @@ export class FavoriteService {
 
       const existing = await this.prisma.favorite.findUnique({
          where: {
-            userProfileId_audiobookId: {
-               userProfileId,
+            userId_audiobookId: {
+               userId,
                audiobookId: data.audiobookId,
             },
          },
@@ -44,19 +45,21 @@ export class FavoriteService {
          );
       }
 
-      const favorite = await this.prisma.favorite.create({
-         data: {
-            userProfileId,
-            audiobookId: data.audiobookId,
-         },
-      });
+      const favorite = await runWrite(this.prisma, async (tx) =>
+         tx.favorite.create({
+            data: {
+               userId,
+               audiobookId: data.audiobookId,
+            },
+         }),
+      );
 
       emitCacheInvalidation('favorite', 'created', favorite.id);
       return toFavoriteDto(favorite);
    }
 
    async getFavorites(
-      userProfileId: string,
+      userId: string,
       query: FavoriteQueryParams
    ): Promise<{ favorites: FavoriteDto[]; totalCount: number }> {
       const page = query.page ?? 1;
@@ -65,7 +68,7 @@ export class FavoriteService {
       const sortBy = query.sortBy ?? 'createdAt';
       const sortOrder = query.sortOrder ?? 'desc';
 
-      const where: Prisma.FavoriteWhereInput = { userProfileId };
+      const where: Prisma.FavoriteWhereInput = { userId };
       if (query.audiobookId) where.audiobookId = query.audiobookId;
 
       const [favorites, totalCount] = await Promise.all([
@@ -84,7 +87,7 @@ export class FavoriteService {
       };
    }
 
-   async getFavoriteById(id: string, userProfileId: string): Promise<FavoriteDto> {
+   async getFavoriteById(id: string, userId: string): Promise<FavoriteDto> {
       const favorite = await this.prisma.favorite.findUnique({ where: { id } });
       if (!favorite) {
          throw new ApiError(
@@ -93,13 +96,13 @@ export class FavoriteService {
             ErrorType.NOT_FOUND
          );
       }
-      if (favorite.userProfileId !== userProfileId) {
+      if (favorite.userId !== userId) {
          throw ApiError.forbidden(MessageHandler.getErrorMessage('favorites.access_denied'));
       }
       return toFavoriteDto(favorite);
    }
 
-   async deleteFavorite(id: string, userProfileId: string): Promise<void> {
+   async deleteFavorite(id: string, userId: string): Promise<void> {
       const favorite = await this.prisma.favorite.findUnique({ where: { id } });
       if (!favorite) {
          throw new ApiError(
@@ -108,11 +111,11 @@ export class FavoriteService {
             ErrorType.NOT_FOUND
          );
       }
-      if (favorite.userProfileId !== userProfileId) {
+      if (favorite.userId !== userId) {
          throw ApiError.forbidden(MessageHandler.getErrorMessage('favorites.access_denied'));
       }
 
-      await this.prisma.favorite.delete({ where: { id } });
+      await runWrite(this.prisma, async (tx) => tx.favorite.delete({ where: { id } }));
       emitCacheInvalidation('favorite', 'deleted', id);
    }
 }

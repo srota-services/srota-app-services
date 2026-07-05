@@ -18,6 +18,15 @@ export interface AuthAuthorCatalogInfo {
    userId: string;
    firstName?: string | null;
    lastName?: string | null;
+   avatar?: string | null;
+   imageAssets?: Record<string, string>;
+}
+
+export interface AuthPublicUserProfile {
+   userId: string;
+   username: string;
+   avatar?: string;
+   imageAssets?: Record<string, string>;
 }
 
 export interface AuthOrganizationCatalogInfo {
@@ -30,6 +39,7 @@ export interface AuthOrganizationCatalogInfo {
    preferredGenre?: string | null;
    websiteUrl?: string | null;
    teamSize?: string | null;
+   discoverable?: boolean;
 }
 
 export interface AuthMembershipInfo {
@@ -140,6 +150,25 @@ export class AuthClient {
       }
    }
 
+   async getPublicUserProfile(userId: string, accessToken: string): Promise<AuthPublicUserProfile | null> {
+      try {
+         const response = await axios.get<{ profile: AuthPublicUserProfile }>(
+            `${this.baseUrl}/auth/users/${userId}/profile`,
+            {
+               headers: this.authHeaders(accessToken),
+               timeout: 5000,
+            },
+         );
+         return response.data?.profile ?? null;
+      } catch (error) {
+         if (axios.isAxiosError(error) && (error as AxiosError).response?.status === 404) {
+            return null;
+         }
+         console.error('AuthClient.getPublicUserProfile failed:', error);
+         throw error;
+      }
+   }
+
    async getMembership(
       organizationId: string,
       accessToken: string,
@@ -164,6 +193,24 @@ export class AuthClient {
             return null;
          }
          console.error('AuthClient.getMembership failed:', error);
+         throw error;
+      }
+   }
+
+   async getOrganizationMembershipsForUser(
+      accessToken: string,
+   ): Promise<Array<{ organizationId: string; role: string }>> {
+      try {
+         const response = await axios.get<{ memberships: Array<{ organizationId: string; role: string }> }>(
+            `${this.baseUrl}/auth/users/me/organization-memberships`,
+            {
+               headers: this.authHeaders(accessToken),
+               timeout: 5000,
+            },
+         );
+         return response.data?.memberships ?? [];
+      } catch (error) {
+         console.error('AuthClient.getOrganizationMembershipsForUser failed:', error);
          throw error;
       }
    }

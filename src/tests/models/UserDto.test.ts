@@ -1,109 +1,37 @@
 /**
  * UserDto Tests
- * Tests for User DTO conversion and validation
  */
-
 import {
    UserProfileDto,
-   CreateUserProfileDto,
-   UpdateUserProfileDto,
-   toUserProfileDto,
    UserSession,
    AuthenticatedRequest,
 } from '../../models/UserDto';
-import { UserProfile as PrismaUserProfile } from '@prisma/client';
 
 describe('UserDto', () => {
-   const createMockPrismaUserProfile = (overrides = {}): PrismaUserProfile => {
-      return {
-         id: 'profile-id',
-         userId: 'user-id',
-         username: 'testuser',
-         avatar: 'https://example.com/avatar.jpg',
-         preferences: { theme: 'dark', language: 'en' },
-         createdAt: new Date('2024-01-01'),
-         updatedAt: new Date('2024-01-02'),
-         ...overrides,
-      };
-   };
-
-   const createMockUserProfileDto = (overrides = {}): UserProfileDto => {
-      return {
-         id: 'profile-id',
-         userId: 'user-id',
-         username: 'testuser',
-         avatar: 'https://example.com/avatar.jpg',
-         preferences: { theme: 'dark', language: 'en' },
-         createdAt: new Date('2024-01-01'),
-         updatedAt: new Date('2024-01-02'),
-         ...overrides,
-      };
-   };
-
-   const createMockUserSession = (overrides = {}): UserSession => {
-      return {
-         userId: 'user-id',
-         username: 'testuser',
-         sessionId: 'session-id',
-         createdAt: new Date('2024-01-01'),
-         lastAccessed: new Date('2024-01-02'),
-         ...overrides,
-      };
-   };
-
-   describe('toUserProfileDto', () => {
-      it('should convert Prisma UserProfile to DTO with all fields', () => {
-         const prismaProfile = createMockPrismaUserProfile();
-         const result = toUserProfileDto(prismaProfile);
-
-         expect(result.id).toBe(prismaProfile.id);
-         expect(result.userId).toBe(prismaProfile.userId);
-         expect(result.username).toBe(prismaProfile.username);
-         expect(result.avatar).toBe(prismaProfile.avatar);
-         expect(result.preferences).toEqual(prismaProfile.preferences);
-         expect(result.createdAt).toEqual(prismaProfile.createdAt);
-         expect(result.updatedAt).toEqual(prismaProfile.updatedAt);
-      });
-
-      it('should handle null optional fields by converting to undefined', () => {
-         const prismaProfile = createMockPrismaUserProfile({
-            avatar: null,
-            preferences: null,
-         });
-
-         const result = toUserProfileDto(prismaProfile);
-
-         expect(result.avatar).toBeUndefined();
-         expect(result.preferences).toBeUndefined();
-      });
+   const createMockUserProfileDto = (overrides = {}): UserProfileDto => ({
+      userId: 'user-id',
+      username: 'testuser',
+      avatar: 'https://example.com/avatar.jpg',
+      imageAssets: { square_120: 'https://example.com/avatar.jpg' },
+      ...overrides,
    });
 
-   describe('CreateUserProfileDto', () => {
-      it('should create valid CreateUserProfileDto', () => {
-         const createDto: CreateUserProfileDto = {
-            userId: 'user-id',
-            username: 'newuser',
-            avatar: 'avatar.jpg',
-            preferences: { theme: 'light' },
-         };
-
-         expect(createDto.userId).toBe('user-id');
-         expect(createDto.username).toBe('newuser');
-         expect(createDto.avatar).toBe('avatar.jpg');
-      });
+   const createMockUserSession = (overrides = {}): UserSession => ({
+      userId: 'user-id',
+      username: 'testuser',
+      sessionId: 'session-id',
+      createdAt: new Date('2024-01-01'),
+      lastAccessed: new Date('2024-01-02'),
+      ...overrides,
    });
 
-   describe('UpdateUserProfileDto', () => {
-      it('should accept app-local optional fields', () => {
-         const updateDto: UpdateUserProfileDto = {
-            username: 'updateduser',
-            avatar: 'new-avatar.jpg',
-            preferences: { theme: 'auto' },
-         };
+   describe('UserProfileDto', () => {
+      it('should represent auth-service public profile fields', () => {
+         const profile = createMockUserProfileDto();
 
-         expect(updateDto.username).toBe('updateduser');
-         expect(updateDto.avatar).toBe('new-avatar.jpg');
-         expect(updateDto.preferences?.theme).toBe('auto');
+         expect(profile.userId).toBe('user-id');
+         expect(profile.username).toBe('testuser');
+         expect(profile.avatar).toBe('https://example.com/avatar.jpg');
       });
    });
 
@@ -120,11 +48,14 @@ describe('UserDto', () => {
    describe('AuthenticatedRequest', () => {
       it('should accept user and session context', () => {
          const request: AuthenticatedRequest = {
-            user: createMockUserProfileDto(),
+            user: {
+               id: 'user-id',
+               role: 'LISTENER',
+            },
             session: createMockUserSession(),
          };
 
-         expect(request.user?.username).toBe('testuser');
+         expect(request.user?.id).toBe('user-id');
          expect(request.session?.sessionId).toBe('session-id');
       });
    });

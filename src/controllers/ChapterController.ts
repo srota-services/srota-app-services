@@ -5,15 +5,19 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { ChapterService } from '../services/ChapterService';
+import { ChapterWithRelations } from '../models/ChapterDto';
 import { BackgroundJobService } from '../services/BackgroundJobService';
 import { ContentAuthorizationService } from '../services/ContentAuthorizationService';
 import { ResponseHandler } from '../utils/ResponseHandler';
-import { ChapterQueryParams } from '../models/ChapterDto';
+import { ChapterQueryParams, CreateChapterRequest, UpdateChapterRequest } from '../models/ChapterDto';
+import { parseOptionalMinSubscriptionTierFromForm } from '../utils/subscriptionGatingValidation';
 import { ErrorHandler } from '../middleware/ErrorHandler';
 import { MessageHandler } from '../utils/MessageHandler';
-import { ApiError } from '../types/ApiError';
-import { HttpStatusCode, ErrorType } from '../types/common';
 import { AuthenticatedRequest } from '../types/auth';
+import { parsePagesFromBody } from '../utils/audiobookTypeValidation';
+import { AudiobookType } from '@prisma/client';
+import { isGuestRequest } from '../utils/guestCatalogDefaults';
+import { resolveUserId } from '../utils/resolveUserId';
 
 export class ChapterController {
    private chapterService: ChapterService;
@@ -35,28 +39,35 @@ export class ChapterController {
       return token.length > 0 ? token : undefined;
    }
 
-   /** Map JWT auth user id to local UserProfile.id */
-   private async resolveUserProfileId(req: Request): Promise<string> {
+   private async attachChapterSubscriptionAccess(
+      chapters: ChapterWithRelations[],
+      audiobookId: string,
+      req: Request,
+   ): Promise<ChapterWithRelations[]> {
       const authUser = (req as AuthenticatedRequest).user;
-      if (!authUser?.id) {
-         throw new ApiError(
-            MessageHandler.getErrorMessage('unauthorized.not_authenticated'),
-            HttpStatusCode.UNAUTHORIZED,
-            ErrorType.UNAUTHORIZED
-         );
-      }
-      const profile = await this.prisma.userProfile.findUnique({
-         where: { userId: authUser.id },
-         select: { id: true },
+      const userId = authUser?.id ?? null;
+      const accessToken = this.getBearerToken(req) ?? null;
+
+      const audiobook = await this.prisma.audioBook.findUnique({
+         where: { id: audiobookId },
+         select: { subscriptionGatingMode: true, minSubscriptionTier: true },
       });
-      if (!profile) {
-         throw new ApiError(
-            MessageHandler.getErrorMessage('not_found.user'),
-            HttpStatusCode.NOT_FOUND,
-            ErrorType.NOT_FOUND
-         );
+      if (!audiobook) {
+         return chapters;
       }
-      return profile.id;
+
+      return Promise.all(
+         chapters.map(async (chapter) => ({
+            ...chapter,
+            subscriptionAccess: await this.chapterService.getSubscriptionAccessForChapter(
+               { minSubscriptionTier: chapter.minSubscriptionTier ?? null },
+               audiobook,
+               userId,
+               accessToken,
+               authUser?.role ?? null,
+            ),
+         })),
+      );
    }
 
    /**
@@ -105,9 +116,11 @@ export class ChapterController {
          limit: req.query['limit'] ? parseInt(req.query['limit'] as string, 10) : 50,
          sortBy: req.query['sortBy'] as string || 'chapterNumber',
          sortOrder: (req.query['sortOrder'] as 'asc' | 'desc') || 'asc',
+         activeOnly: isGuestRequest(req),
       };
 
       const { chapters, totalCount } = await this.chapterService.getChaptersByAudiobookId(audiobookId!, queryParams);
+      const chaptersWithAccess = await this.attachChapterSubscriptionAccess(chapters, audiobookId!, req);
 
       const pagination = ResponseHandler.calculatePagination(
          queryParams.page!,
@@ -115,7 +128,7 @@ export class ChapterController {
          totalCount
       );
 
-      ResponseHandler.paginated(res, chapters, pagination, MessageHandler.getSuccessMessage('chapters.retrieved'));
+      ResponseHandler.paginated(res, chaptersWithAccess, pagination, MessageHandler.getSuccessMessage('chapters.retrieved'));
    });
 
    /**
@@ -154,7 +167,89 @@ export class ChapterController {
 
       const chapter = await this.chapterService.getChapterById(id as string);
 
-      ResponseHandler.success(res, chapter, MessageHandler.getSuccessMessage('chapters.retrieved_by_id'));
+      if (isGuestRequest(req)) {
+         if (!chapter.isActive) {
+            ResponseHandler.notFound(res, MessageHandler.getErrorMessage('not_found.chapter'));
+            return;
+         }
+
+         const audiobook = await this.prisma.audioBook.findUnique({
+            where: { id: chapter.audiobookId },
+            select: { isActive: true },
+         });
+
+         if (!audiobook?.isActive) {
+            ResponseHandler.notFound(res, MessageHandler.getErrorMessage('not_found.chapter'));
+            return;
+         }
+      }
+
+      const [chapterWithAccess] = await this.attachChapterSubscriptionAccess(
+         [chapter],
+         chapter.audiobookId,
+         req,
+      );
+
+      ResponseHandler.success(res, chapterWithAccess, MessageHandler.getSuccessMessage('chapters.retrieved_by_id'));
+   });
+
+   /**
+    * @swagger
+    * /api/v1/chapters/{id}/stream-gating:
+    *   get:
+    *     summary: Get chapter stream subscription gating context
+    *     description: |
+    *       Returns the minimum subscription tier required to stream this chapter.
+    *       Used by streaming-service for LISTENER subscription gating. `requiredTier: null` means free access.
+    *     tags: [Chapters]
+    *     security:
+    *       - bearerAuth: []
+    *     parameters:
+    *       - name: id
+    *         in: path
+    *         required: true
+    *         schema:
+    *           type: string
+    *         description: Chapter ID
+    *     responses:
+    *       200:
+    *         description: Stream gating context retrieved successfully
+    *         content:
+    *           application/json:
+    *             schema:
+    *               allOf:
+    *                 - $ref: '#/components/schemas/ApiResponse'
+    *                 - type: object
+    *                   properties:
+    *                     data:
+    *                       type: object
+    *                       required:
+    *                         - chapterId
+    *                         - requiredTier
+    *                       properties:
+    *                         chapterId:
+    *                           type: string
+    *                         requiredTier:
+    *                           $ref: '#/components/schemas/SubscriptionTierLevel'
+    *                           nullable: true
+    *                           description: Minimum tier required to stream; null when chapter is free
+    *       401:
+    *         $ref: '#/components/responses/Unauthorized'
+    *       404:
+    *         $ref: '#/components/responses/NotFound'
+    *       500:
+    *         $ref: '#/components/responses/InternalServerError'
+    */
+   getChapterStreamGating = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
+      const { id } = req.params;
+
+      const requiredTier = await this.chapterService.getChapterRequiredTierForStream(id as string);
+
+      ResponseHandler.success(
+         res,
+         { chapterId: id, requiredTier },
+         MessageHandler.getSuccessMessage('chapters.stream_gating_retrieved'),
+      );
    });
 
    /**
@@ -162,7 +257,7 @@ export class ChapterController {
     * /api/v1/chapters:
     *   post:
     *     summary: Create a new chapter
-    *     description: Create a new chapter for an audiobook with optional audio file upload
+    *     description: Create a new chapter. Publication chapters require cover image and audio; authoring chapters require at least one page (plain text optional) and may omit cover image.
     *     tags: [Chapters]
     *     requestBody:
     *       required: true
@@ -209,6 +304,10 @@ export class ChapterController {
     *                 type: string
     *                 format: binary
     *                 description: Audio file (required, max 1GB)
+    *               minSubscriptionTier:
+    *                 type: integer
+    *                 nullable: true
+    *                 description: When the audiobook uses CHAPTER gating, chapter 1 must be null (free). Later chapters require a tier.
     *           examples:
     *             example1:
     *               summary: Example chapter with audio file
@@ -241,40 +340,69 @@ export class ChapterController {
     *         $ref: '#/components/responses/InternalServerError'
     */
    createChapter = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
-      // Get files from combined upload middleware
       const uploadedCoverImage = (req as any).coverImageFile as Express.Multer.File | undefined;
       const uploadedFile = (req as any).audioFile as Express.Multer.File | undefined;
 
-      // Files are already validated by middleware, but double-check for safety
-      if (!uploadedCoverImage) {
-         ResponseHandler.validationError(res, 'Cover image is required');
+      const audiobook = await this.prisma.audioBook.findUnique({
+         where: { id: req.body.audiobookId },
+         select: { type: true },
+      });
+
+      if (!audiobook) {
+         ResponseHandler.notFound(res, MessageHandler.getErrorMessage('not_found.audiobook'));
          return;
       }
 
-      if (!uploadedFile) {
+      const isAuthoring = audiobook.type === AudiobookType.AUTHORING;
+
+      if (!isAuthoring && !uploadedCoverImage) {
+         ResponseHandler.validationError(
+            res,
+            MessageHandler.getErrorMessage('validation.publication_chapter_cover_required'),
+         );
+         return;
+      }
+
+      if (!isAuthoring && !uploadedFile) {
          ResponseHandler.validationError(res, 'Audio file is required');
          return;
       }
 
-      // Parse form-data values (they come as strings from multipart/form-data)
-      const chapterData: any = {
+      const chapterData: CreateChapterRequest = {
          audiobookId: req.body.audiobookId,
          title: req.body.title,
          description: req.body.description || undefined,
          chapterNumber: parseInt(req.body.chapterNumber, 10),
-         duration: parseInt(req.body.duration, 10),
-         startPosition: parseInt(req.body.startPosition, 10),
-         endPosition: parseInt(req.body.endPosition, 10),
       };
 
-      // Parse isActive if provided (defaults to true in service)
-      if (req.body.isActive !== undefined) {
-         chapterData.isActive = req.body.isActive === 'true' || req.body.isActive === true;
+      if (!isAuthoring) {
+         const pagesField = req.body.pages;
+         if (pagesField !== undefined && pagesField !== null && pagesField !== '') {
+            ResponseHandler.validationError(
+               res,
+               MessageHandler.getErrorMessage('validation.pages_publication_forbidden'),
+            );
+            return;
+         }
+
+         chapterData.duration = parseInt(req.body.duration, 10);
+         chapterData.startPosition = parseInt(req.body.startPosition, 10);
+         chapterData.endPosition = parseInt(req.body.endPosition, 10);
+      } else {
+         const pages = parsePagesFromBody(req.body.pages);
+         if (pages) {
+            chapterData.pages = pages;
+         }
       }
 
-      // Parse scheduledAt if provided (can be ISO string or Date)
       if (req.body.scheduledAt) {
          chapterData.scheduledAt = new Date(req.body.scheduledAt);
+      }
+
+      if (!isAuthoring && req.body.minSubscriptionTier !== undefined) {
+         chapterData.minSubscriptionTier = parseOptionalMinSubscriptionTierFromForm(
+            req.body.minSubscriptionTier,
+         ) ?? null;
       }
 
       const authReq = req as AuthenticatedRequest;
@@ -301,7 +429,11 @@ export class ChapterController {
          return;
       }
 
-      const chapter = await this.chapterService.createChapter(chapterData, uploadedFile, uploadedCoverImage);
+      const chapter = await this.chapterService.createChapter(
+         chapterData,
+         isAuthoring ? undefined : uploadedFile,
+         uploadedCoverImage,
+      );
 
       ResponseHandler.success(res, chapter, MessageHandler.getSuccessMessage('chapters.created'), 201);
    });
@@ -349,6 +481,10 @@ export class ChapterController {
     *                 type: string
     *                 format: binary
     *                 description: Audio file (optional)
+    *               coverImage:
+    *                 type: string
+    *                 format: binary
+    *                 description: Chapter cover image (optional)
     *               isActive:
     *                 type: boolean
     *                 description: Whether the chapter is active
@@ -356,6 +492,9 @@ export class ChapterController {
     *                 type: string
     *                 format: date-time
     *                 description: Scheduled activation date
+    *               minSubscriptionTier:
+    *                 type: integer
+    *                 description: Minimum subscription tier when audiobook uses CHAPTER gating mode
     *           examples:
     *             example1:
     *               summary: Update chapter with audio file
@@ -416,11 +555,27 @@ export class ChapterController {
          return;
       }
 
-      const uploadedFile = req.file as Express.Multer.File | undefined;
+      const pagesField = req.body.pages;
+      if (pagesField !== undefined && pagesField !== null && pagesField !== '') {
+         const existingChapter = await this.prisma.chapter.findUnique({
+            where: { id: id as string },
+            select: { audiobook: { select: { type: true } } },
+         });
+
+         if (existingChapter?.audiobook.type === AudiobookType.PUBLICATION) {
+            ResponseHandler.validationError(
+               res,
+               MessageHandler.getErrorMessage('validation.pages_publication_forbidden'),
+            );
+            return;
+         }
+      }
+
+      const uploadedFile = (req as any).audioFile as Express.Multer.File | undefined;
       const uploadedCoverImage = (req as any).coverImageFile as Express.Multer.File | undefined;
 
       // Parse form-data values (they come as strings from multipart/form-data)
-      const updateData: any = {};
+      const updateData: UpdateChapterRequest = {};
 
       // Only include fields that are provided
       if (req.body.title !== undefined) {
@@ -446,6 +601,11 @@ export class ChapterController {
       }
       if (req.body.scheduledAt !== undefined && req.body.scheduledAt !== '') {
          updateData.scheduledAt = new Date(req.body.scheduledAt);
+      }
+      if (req.body.minSubscriptionTier !== undefined) {
+         updateData.minSubscriptionTier = parseOptionalMinSubscriptionTierFromForm(
+            req.body.minSubscriptionTier,
+         ) ?? null;
       }
 
       // File data will be handled by uploadedFile
@@ -556,9 +716,9 @@ export class ChapterController {
     */
    getChapterProgress = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
       const { id } = req.params;
-      const userProfileId = await this.resolveUserProfileId(req);
+      const userId = resolveUserId(req);
 
-      const progress = await this.chapterService.getChapterProgress(userProfileId, id as string);
+      const progress = await this.chapterService.getChapterProgress(userId, id as string);
 
       ResponseHandler.success(res, progress, MessageHandler.getSuccessMessage('chapters.progress_retrieved'));
    });
@@ -610,10 +770,10 @@ export class ChapterController {
     */
    updateChapterProgress = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
       const { id } = req.params;
-      const userProfileId = await this.resolveUserProfileId(req);
+      const userId = resolveUserId(req);
       const progressData = req.body;
 
-      const progress = await this.chapterService.updateChapterProgress(userProfileId, id as string, progressData);
+      const progress = await this.chapterService.updateChapterProgress(userId, id as string, progressData);
 
       ResponseHandler.success(res, progress, MessageHandler.getSuccessMessage('chapters.progress_updated'));
    });
@@ -651,9 +811,9 @@ export class ChapterController {
     */
    getChapterWithProgress = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
       const { id } = req.params;
-      const userProfileId = await this.resolveUserProfileId(req);
+      const userId = resolveUserId(req);
 
-      const chapterWithProgress = await this.chapterService.getChapterWithProgress(userProfileId, id as string);
+      const chapterWithProgress = await this.chapterService.getChapterWithProgress(userId, id as string);
 
       ResponseHandler.success(res, chapterWithProgress, MessageHandler.getSuccessMessage('chapters.with_progress_retrieved'));
    });
@@ -691,9 +851,9 @@ export class ChapterController {
     */
    getChapterNavigation = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
       const { id } = req.params;
-      const userProfileId = await this.resolveUserProfileId(req);
+      const userId = resolveUserId(req);
 
-      const navigation = await this.chapterService.getChapterNavigation(userProfileId, id as string);
+      const navigation = await this.chapterService.getChapterNavigation(userId, id as string);
 
       ResponseHandler.success(res, navigation, MessageHandler.getSuccessMessage('chapters.navigation_retrieved'));
    });
@@ -733,9 +893,9 @@ export class ChapterController {
     */
    getChaptersWithProgress = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
       const { audiobookId } = req.params;
-      const userProfileId = await this.resolveUserProfileId(req);
+      const userId = resolveUserId(req);
 
-      const chaptersWithProgress = await this.chapterService.getChaptersWithProgress(userProfileId, audiobookId!);
+      const chaptersWithProgress = await this.chapterService.getChaptersWithProgress(userId, audiobookId!);
 
       ResponseHandler.success(res, chaptersWithProgress, MessageHandler.getSuccessMessage('chapters.with_progress_retrieved'));
    });

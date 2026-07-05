@@ -13,7 +13,7 @@ export interface PlaylistItemDto {
 
 export interface PlaylistDto {
    id: string;
-   userProfileId: string;
+   userId: string;
    name: string;
    description?: string | null;
    isPublic: boolean;
@@ -67,7 +67,7 @@ export function toPlaylistDto(
 ): PlaylistDto {
    const dto: PlaylistDto = {
       id: playlist.id,
-      userProfileId: playlist.userProfileId,
+      userId: playlist.userId,
       name: playlist.name,
       description: playlist.description,
       isPublic: playlist.isPublic,

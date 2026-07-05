@@ -50,10 +50,6 @@ function keysForResource(
          }
          return keys;
       }
-      case 'user-profile':
-         return [['user-profiles'], ['user-profiles', id], ['user-profiles', 'me']];
-      case 'author-profile':
-         return [['author-profiles'], ['author-profiles', id], ['author-profiles', 'me']];
       case 'playlist': {
          const userId = relatedIds['userId'];
          const keys: string[][] = [['playlists'], ['playlists', id], ['playlists', 'me']];
@@ -100,10 +96,26 @@ function keysForResource(
          return [['tags'], ['tags', id], ['audiobooks']];
       case 'genre':
          return [['genres'], ['genres', id], ['audiobooks']];
+      case 'language':
+         return [['languages'], ['languages', id], ['audiobooks']];
       case 'mood':
          return [['moods'], ['moods', id], ['audiobooks']];
       case 'user-audiobook':
          return [['user-audiobooks'], ['user-audiobooks', 'me']];
+      case 'subscription-catalog':
+         return [['audiobooks'], ['user-audiobooks'], ['user-audiobooks', 'me']];
+      case 'subscription-gating': {
+         const audiobookId = relatedIds['audiobookId'];
+         const chapterId = relatedIds['chapterId'];
+         const keys: string[][] = [['audiobooks']];
+         if (audiobookId) {
+            keys.push(['audiobooks', audiobookId], ['audiobooks', audiobookId, 'chapters']);
+            if (chapterId) {
+               keys.push(['audiobooks', audiobookId, 'chapters', chapterId]);
+            }
+         }
+         return keys;
+      }
       case 'offline-download':
          return [['offline-downloads'], ['offline-downloads', id], ['offline-downloads', 'me']];
       default:

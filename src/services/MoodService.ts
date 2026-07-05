@@ -18,6 +18,8 @@ import { MessageHandler } from '../utils/MessageHandler';
 import { HttpStatusCode, ErrorType } from '../types/common';
 import { emitCacheInvalidation } from './DomainEventPublisher';
 import { AudioBookService } from './AudioBookService';
+import { runInTransaction, runWrite } from '../utils/prismaTransaction';
+import { rethrowServiceError } from '../utils/serviceError';
 
 const moodAttributesInclude = {
    moodAttributes: {
@@ -63,18 +65,20 @@ export class MoodService {
 
          const description = this.normalizeDescription(createMoodDto.description);
 
-         const created = await this.prisma.mood.create({
-            data: {
-               name: trimmedName,
-               description,
-               descriptionIcon,
-               hexcode,
-               icon,
-               ...(attributes.length > 0
-                  ? { moodAttributes: { create: attributes } }
-                  : {})
-            }
-         });
+         const created = await runWrite(this.prisma, async (tx) =>
+            tx.mood.create({
+               data: {
+                  name: trimmedName,
+                  description,
+                  descriptionIcon,
+                  hexcode,
+                  icon,
+                  ...(attributes.length > 0
+                     ? { moodAttributes: { create: attributes } }
+                     : {})
+               }
+            }),
+         );
 
          emitCacheInvalidation('mood', 'created', created.id);
          return toMoodDto(created);
@@ -82,11 +86,7 @@ export class MoodService {
          if (error instanceof ApiError) {
             throw error;
          }
-         throw new ApiError(
-            MessageHandler.getErrorMessage('moods.create_failed'),
-            HttpStatusCode.INTERNAL_SERVER_ERROR,
-            ErrorType.INTERNAL_ERROR
-         );
+         rethrowServiceError(error, { operation: 'createMood' }, MessageHandler.getErrorMessage('moods.create_failed'));
       }
    }
 
@@ -96,16 +96,12 @@ export class MoodService {
             orderBy: { name: 'asc' }
          });
          return moods.map(mood => toMoodDto(mood));
-      } catch (_error) {
-         throw new ApiError(
-            MessageHandler.getErrorMessage('moods.fetch_failed'),
-            HttpStatusCode.INTERNAL_SERVER_ERROR,
-            ErrorType.INTERNAL_ERROR
-         );
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'getAllMoods' }, MessageHandler.getErrorMessage('moods.fetch_failed'));
       }
    }
 
-   async getMoodById(id: string, accessToken?: string): Promise<MoodDetailDto> {
+   async getMoodById(id: string, accessToken?: string, guestCatalogOnly = false): Promise<MoodDetailDto> {
       try {
          const mood = await this.prisma.mood.findUnique({
             where: { id },
@@ -120,7 +116,7 @@ export class MoodService {
             );
          }
 
-         const audiobooks = await this.audioBookService.getAudioBooksByMoodId(id, accessToken);
+         const audiobooks = await this.audioBookService.getAudioBooksByMoodId(id, accessToken, guestCatalogOnly);
 
          return {
             ...(toMoodDto(mood, true) as MoodDto),
@@ -201,22 +197,33 @@ export class MoodService {
 
          if (updateMoodDto.attributes !== undefined) {
             const attributes = this.normalizeAttributes(updateMoodDto.attributes);
-            await this.prisma.moodAttribute.deleteMany({ where: { moodId: id } });
-            if (attributes.length > 0) {
-               await this.prisma.moodAttribute.createMany({
-                  data: attributes.map(attribute => ({
-                     moodId: id,
-                     icon: attribute.icon,
-                     description: attribute.description
-                  }))
+            const updated = await runInTransaction(this.prisma, async (tx) => {
+               await tx.moodAttribute.deleteMany({ where: { moodId: id } });
+               if (attributes.length > 0) {
+                  await tx.moodAttribute.createMany({
+                     data: attributes.map(attribute => ({
+                        moodId: id,
+                        icon: attribute.icon,
+                        description: attribute.description
+                     }))
+                  });
+               }
+               return tx.mood.update({
+                  where: { id },
+                  data
                });
-            }
+            });
+
+            emitCacheInvalidation('mood', 'updated', id);
+            return toMoodDto(updated);
          }
 
-         const updated = await this.prisma.mood.update({
-            where: { id },
-            data
-         });
+         const updated = await runWrite(this.prisma, async (tx) =>
+            tx.mood.update({
+               where: { id },
+               data
+            }),
+         );
 
          emitCacheInvalidation('mood', 'updated', id);
          return toMoodDto(updated);
@@ -224,11 +231,7 @@ export class MoodService {
          if (error instanceof ApiError) {
             throw error;
          }
-         throw new ApiError(
-            MessageHandler.getErrorMessage('moods.update_failed'),
-            HttpStatusCode.INTERNAL_SERVER_ERROR,
-            ErrorType.INTERNAL_ERROR
-         );
+         rethrowServiceError(error, { operation: 'updateMood' }, MessageHandler.getErrorMessage('moods.update_failed'));
       }
    }
 
@@ -243,18 +246,14 @@ export class MoodService {
             );
          }
 
-         await this.prisma.mood.delete({ where: { id } });
+         await runWrite(this.prisma, async (tx) => tx.mood.delete({ where: { id } }));
          emitCacheInvalidation('mood', 'deleted', id);
          return true;
       } catch (error) {
          if (error instanceof ApiError) {
             throw error;
          }
-         throw new ApiError(
-            MessageHandler.getErrorMessage('moods.delete_failed'),
-            HttpStatusCode.INTERNAL_SERVER_ERROR,
-            ErrorType.INTERNAL_ERROR
-         );
+         rethrowServiceError(error, { operation: 'deleteMood' }, MessageHandler.getErrorMessage('moods.delete_failed'));
       }
    }
 

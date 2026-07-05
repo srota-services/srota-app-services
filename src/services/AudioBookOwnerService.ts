@@ -1,5 +1,5 @@
 /**
- * Hydrates audiobook owner details from auth-service and app AuthorProfile.
+ * Hydrates audiobook owner details from auth-service catalog.
  */
 import { PrismaClient } from '@prisma/client';
 import { authClient, AuthAuthorCatalogInfo, AuthOrganizationCatalogInfo } from '../clients/AuthClient';
@@ -11,7 +11,7 @@ import {
 import { fileUrlService } from './FileUrlService';
 
 export class AudioBookOwnerService {
-   constructor(private prisma: PrismaClient) {}
+   constructor(_prisma: PrismaClient) {}
 
    async attachOwnerDetails(
       dtos: AudioBookDto[],
@@ -36,20 +36,13 @@ export class AudioBookOwnerService {
          }
       }
 
-      const [organizations, authors, authorProfiles] = await Promise.all([
+      const [organizations, authors] = await Promise.all([
          this.fetchOrganizations([...organizationIds], accessToken),
          this.fetchAuthors([...authorIds], accessToken),
-         authorIds.size > 0
-            ? this.prisma.authorProfile.findMany({
-               where: { authorId: { in: [...authorIds] } },
-               select: { authorId: true, avatar: true },
-            })
-            : Promise.resolve([]),
       ]);
 
       const orgMap = new Map(organizations.map((org) => [org.id, org]));
       const authorMap = new Map(authors.map((author) => [author.id, author]));
-      const avatarMap = new Map(authorProfiles.map((p) => [p.authorId, p.avatar]));
 
       return Promise.all(
          dtos.map(async (dto) => {
@@ -73,11 +66,9 @@ export class AudioBookOwnerService {
                return dto;
             }
 
-            const avatarStored = avatarMap.get(dto.owner.id);
-            const avatar = avatarStored
-               ? await fileUrlService.resolveForClient(avatarStored)
+            const avatar = author.avatar
+               ? await fileUrlService.resolveForClient(author.avatar)
                : undefined;
-            const imageAssets = await fileUrlService.resolveImageAssetsForEntity('author', dto.owner.id);
 
             const authorDetails: AudioBookOwnerAuthorDetails = {
                id: author.id,
@@ -86,7 +77,7 @@ export class AudioBookOwnerService {
                firstName: author.firstName ?? null,
                lastName: author.lastName ?? null,
                ...(avatar !== undefined ? { avatar: avatar ?? null } : {}),
-               imageAssets,
+               imageAssets: author.imageAssets ?? {},
             };
 
             return {

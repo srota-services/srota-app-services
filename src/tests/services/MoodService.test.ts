@@ -18,6 +18,7 @@ const mockPrisma = {
       deleteMany: jest.fn(),
       createMany: jest.fn(),
    },
+   $transaction: jest.fn(),
 } as any;
 
 jest.mock('../../utils/MessageHandler', () => ({
@@ -36,6 +37,9 @@ describe('MoodService', () => {
       };
       moodService = new MoodService(mockPrisma, mockAudioBookService as unknown as AudioBookService);
       jest.clearAllMocks();
+      mockPrisma.$transaction.mockImplementation(async (fn: (tx: typeof mockPrisma) => Promise<unknown>) =>
+         fn(mockPrisma),
+      );
    });
 
    describe('createMood', () => {
@@ -150,7 +154,7 @@ describe('MoodService', () => {
          expect(result.purpose).toBe('Calm is designed for slowing down, breathing deeply, and finding peace.');
          expect(result.attributes).toHaveLength(1);
          expect(result.audiobooks).toEqual([]);
-         expect(mockAudioBookService.getAudioBooksByMoodId).toHaveBeenCalledWith('m1', undefined);
+         expect(mockAudioBookService.getAudioBooksByMoodId).toHaveBeenCalledWith('m1', undefined, false);
          expect(mockPrisma.mood.findUnique).toHaveBeenCalledWith({
             where: { id: 'm1' },
             include: {
@@ -185,9 +189,11 @@ describe('MoodService', () => {
                id: 'ab1',
                title: 'Book One',
                author: 'Author',
-               language: 'en',
+               type: 'PUBLICATION' as const,
+               languageId: 'lang-en',
                isActive: true,
                isPublic: true,
+               subscriptionGatingMode: 'NONE' as const,
                createdAt: new Date(),
                updatedAt: new Date(),
                owner: { type: 'AUTHOR' as const, id: 'author-1' },
@@ -198,7 +204,7 @@ describe('MoodService', () => {
          const result = await moodService.getMoodById('m1', 'token-123');
 
          expect(result.audiobooks).toEqual(audiobooks);
-         expect(mockAudioBookService.getAudioBooksByMoodId).toHaveBeenCalledWith('m1', 'token-123');
+         expect(mockAudioBookService.getAudioBooksByMoodId).toHaveBeenCalledWith('m1', 'token-123', false);
       });
    });
 
@@ -226,6 +232,7 @@ describe('MoodService', () => {
 
          expect(result.name).toBe('Peaceful');
          expect(result).not.toHaveProperty('attributes');
+         expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
          expect(mockPrisma.moodAttribute.deleteMany).toHaveBeenCalledWith({ where: { moodId: 'm1' } });
          expect(mockPrisma.moodAttribute.createMany).toHaveBeenCalledWith({
             data: [{ moodId: 'm1', icon: 'sparkle', description: 'Gentle' }],

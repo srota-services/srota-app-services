@@ -8,12 +8,12 @@ import { ResponseHandler } from '../utils/ResponseHandler';
 import { ErrorHandler } from '../middleware/ErrorHandler';
 import { MessageHandler } from '../utils/MessageHandler';
 import { CreateFavoriteRequest, FavoriteQueryParams } from '../models/FavoriteDto';
-import { resolveUserProfileId } from '../utils/resolveUserProfileId';
+import { resolveUserId } from '../utils/resolveUserId';
 
 export class FavoriteController {
    private favoriteService: FavoriteService;
 
-   constructor(private prisma: PrismaClient) {
+   constructor(prisma: PrismaClient) {
       this.favoriteService = new FavoriteService(prisma);
    }
 
@@ -36,9 +36,9 @@ export class FavoriteController {
     *         $ref: '#/components/responses/Conflict'
     */
    createFavorite = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
-      const userProfileId = await resolveUserProfileId(this.prisma, req);
+      const userId = resolveUserId(req);
       const data: CreateFavoriteRequest = req.body;
-      const favorite = await this.favoriteService.createFavorite(userProfileId, data);
+      const favorite = await this.favoriteService.createFavorite(userId, data);
       ResponseHandler.success(res, favorite, MessageHandler.getSuccessMessage('favorites.created'), 201);
    });
 
@@ -60,7 +60,7 @@ export class FavoriteController {
     *         description: Favorites retrieved successfully
     */
    getFavorites = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
-      const userProfileId = await resolveUserProfileId(this.prisma, req);
+      const userId = resolveUserId(req);
       const page = req.query['page'] ? parseInt(req.query['page'] as string, 10) : 1;
       const limit = req.query['limit'] ? parseInt(req.query['limit'] as string, 10) : 20;
       const query: FavoriteQueryParams = {
@@ -70,7 +70,7 @@ export class FavoriteController {
          sortBy: (req.query['sortBy'] as FavoriteQueryParams['sortBy']) || 'createdAt',
          sortOrder: (req.query['sortOrder'] as FavoriteQueryParams['sortOrder']) || 'desc',
       };
-      const result = await this.favoriteService.getFavorites(userProfileId, query);
+      const result = await this.favoriteService.getFavorites(userId, query);
       const pagination = ResponseHandler.calculatePagination(page, limit, result.totalCount);
       ResponseHandler.paginated(
          res,
@@ -101,9 +101,9 @@ export class FavoriteController {
     *         $ref: '#/components/responses/NotFound'
     */
    getFavoriteById = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
-      const userProfileId = await resolveUserProfileId(this.prisma, req);
+      const userId = resolveUserId(req);
       const { id } = req.params as { id: string };
-      const favorite = await this.favoriteService.getFavoriteById(id, userProfileId);
+      const favorite = await this.favoriteService.getFavoriteById(id, userId);
       ResponseHandler.success(res, favorite, MessageHandler.getSuccessMessage('favorites.retrieved_by_id'));
    });
 
@@ -126,9 +126,9 @@ export class FavoriteController {
     *         $ref: '#/components/responses/Forbidden'
     */
    deleteFavorite = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
-      const userProfileId = await resolveUserProfileId(this.prisma, req);
+      const userId = resolveUserId(req);
       const { id } = req.params as { id: string };
-      await this.favoriteService.deleteFavorite(id, userProfileId);
+      await this.favoriteService.deleteFavorite(id, userId);
       ResponseHandler.success(res, null, MessageHandler.getSuccessMessage('favorites.deleted'));
    });
 }

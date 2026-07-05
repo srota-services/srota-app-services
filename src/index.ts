@@ -6,8 +6,9 @@ import express from 'express';
 import helmet from 'helmet';
 import path from 'path';
 import { config } from './config/env';
-import { logger } from './config/logger';
+import { logger, errorLogger } from './config/logger';
 import { apiLoggerMiddleware } from './middleware/ApiLoggerMiddleware';
+import { apiErrorLogMiddleware } from './middleware/ApiErrorLogMiddleware';
 import { ApiRouter } from './routes/ApiRouter';
 import { ErrorHandler } from './middleware/ErrorHandler';
 import { MessageHandler } from './utils/MessageHandler';
@@ -18,10 +19,19 @@ import { requireGlobalAdmin } from './middleware/RoleMiddleware';
 import { QueueFactory } from './config/queue';
 import { RabbitMQFactory } from './config/rabbitmq';
 import { TranscodingWorkerFactory } from './workers/TranscodingWorker';
-import { UserConsumerWorkerFactory } from './workers/UserConsumerWorker';
-import { AuthorConsumerWorkerFactory } from './workers/AuthorConsumerWorker';
+import { SubscriptionConsumerWorkerFactory } from './workers/SubscriptionConsumerWorker';
 import { EntityDeletionConsumerWorkerFactory } from './workers/EntityDeletionConsumerWorker';
+import { ChapterTranscodingCompletedConsumerWorkerFactory } from './workers/ChapterTranscodingCompletedConsumerWorker';
 import { prisma } from './lib/prisma';
+
+process.on('uncaughtException', (err) => {
+   errorLogger.error({ category: 'system', type: 'uncaughtException', err }, 'Uncaught exception');
+   process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+   errorLogger.error({ category: 'system', type: 'unhandledRejection', err: reason }, 'Unhandled rejection');
+});
 
 const app = express();
 
@@ -41,6 +51,9 @@ app.use(express.urlencoded({ extended: true }));
 // API access logging middleware
 // This middleware ONLY logs API access requests in format: host:api:statusCode:date_time_IST
 app.use(apiLoggerMiddleware);
+
+// Log API error responses (4xx/5xx) to error.log
+app.use(apiErrorLogMiddleware);
 
 // Session configuration
 app.use(session({
@@ -70,14 +83,14 @@ queueManager.createCleanupQueue();
       // Start transcoding worker
       await TranscodingWorkerFactory.startWorker(prisma);
 
-      // Start user consumer worker
-      await UserConsumerWorkerFactory.startWorker(prisma);
-
-      // Start author consumer worker
-      await AuthorConsumerWorkerFactory.startWorker(prisma);
+      // Start subscription consumer worker
+      await SubscriptionConsumerWorkerFactory.startWorker();
 
       // Start entity deletion consumer worker
       await EntityDeletionConsumerWorkerFactory.startWorker(prisma);
+
+      // Start chapter transcoding completed consumer worker
+      await ChapterTranscodingCompletedConsumerWorkerFactory.startWorker(prisma);
    } catch (error) {
       logger.error({ err: error }, 'Failed to initialize RabbitMQ, transcoding worker, or consumer workers');
    }

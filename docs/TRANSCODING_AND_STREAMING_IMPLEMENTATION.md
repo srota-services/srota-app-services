@@ -422,6 +422,21 @@ interface CacheStats {
 
 ### RabbitMQ Configuration
 
+#### Chapter activation (streaming → app-service)
+
+When all three bitrates (64, 128, 256 kbps) and the master playlist complete successfully, streaming-service publishes to the `chapters` topic exchange:
+
+| Routing key | Queue | Direction |
+|-------------|-------|-----------|
+| `chapter.transcoding.completed` | `{prefix}.chapters.transcoding.completed` | streaming-service → app-service |
+
+App-service sets `transcodingReady: true` and activates the chapter (`isActive: true`) when:
+
+- Transcoding completed successfully, **and**
+- `scheduledAt` is null or in the past (scheduled chapters wait for both transcoding and the scheduled time).
+
+New chapters are created with `isActive: false` and `transcodingReady: false`. Upload success only triggers the transcoding job; it does not activate the chapter.
+
 #### Queue Structure
 
 ```

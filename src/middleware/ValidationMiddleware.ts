@@ -4,6 +4,8 @@
  */
 import { Request, Response, NextFunction } from 'express';
 import { parseAudioBookOwnerFromBody } from '../utils/parseAudioBookOwner';
+import { parseOptionalMinSubscriptionTierFromForm } from '../utils/subscriptionGatingValidation';
+import { ApiError } from '../types/ApiError';
 import { ResponseHandler } from '../utils/ResponseHandler';
 import { MessageHandler } from '../utils/MessageHandler';
 
@@ -59,7 +61,7 @@ export class ValidationMiddleware {
    * Validate audiobook filter parameters
    */
   static validateAudioBookFilters(req: Request, res: Response, next: NextFunction): void {
-    const { genre, language, author, narrator, isActive, isPublic, search, moodId, moodIds, ownerType, ownerId, ownerIds } = req.query;
+    const { genre, author, narrator, isActive, isPublic, search, moodId, moodIds, languageId, languageIds, ownerType, ownerId, ownerIds } = req.query;
 
     const cuidRegex = /^c[a-z0-9]{24}$/;
 
@@ -123,6 +125,37 @@ export class ValidationMiddleware {
       delete req.query['moodId'];
     }
 
+    const languageIdValues: string[] = [];
+
+    if (languageId !== undefined) {
+      if (typeof languageId !== 'string' || !cuidRegex.test(languageId)) {
+        ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.language_id_invalid'));
+        return;
+      }
+      languageIdValues.push(languageId);
+    }
+
+    if (languageIds !== undefined) {
+      const rawLanguageIds = Array.isArray(languageIds)
+        ? languageIds
+        : typeof languageIds === 'string'
+          ? languageIds.split(',').map((id: string) => id.trim()).filter((id: string) => id.length > 0)
+          : [];
+
+      for (const id of rawLanguageIds) {
+        if (typeof id !== 'string' || !cuidRegex.test(id)) {
+          ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.language_id_invalid'));
+          return;
+        }
+        languageIdValues.push(id);
+      }
+    }
+
+    if (languageIdValues.length > 0) {
+      req.query['languageIds'] = languageIdValues.join(',');
+      delete req.query['languageId'];
+    }
+
     // Validate boolean parameters
     if (isActive !== undefined) {
       if (!['true', 'false'].includes(isActive as string)) {
@@ -140,7 +173,7 @@ export class ValidationMiddleware {
 
     // Validate string parameters length
     const maxLength = MessageHandler.getValidationRule('string_fields.max_length');
-    const stringParams = { genre, language, author, narrator, search };
+    const stringParams = { genre, author, narrator, search };
     for (const [key, value] of Object.entries(stringParams)) {
       if (value !== undefined && typeof value === 'string' && value.length > maxLength) {
         ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.string_length', { field: key }));
@@ -167,16 +200,17 @@ export class ValidationMiddleware {
    * Validate MongoDB ObjectId format (if using MongoDB) or CUID format
    */
   static validateId(req: Request, res: Response, next: NextFunction): void {
-    const { id, audiobookId } = req.params;
+    const { id, audiobookId, chapterId } = req.params;
 
-    if (!id && !audiobookId) {
+    if (!id && !audiobookId && !chapterId) {
       ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.id_required'));
       return;
     }
 
     // CUID format validation (used by Prisma)
     const cuidRegex = /^c[a-z0-9]{24}$/;
-    if (!cuidRegex.test(id!) && !cuidRegex.test(audiobookId!)) {
+    const candidate = id ?? audiobookId ?? chapterId;
+    if (!candidate || !cuidRegex.test(candidate)) {
       ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.id_format'));
       return;
     }
@@ -185,18 +219,18 @@ export class ValidationMiddleware {
   }
 
   /**
-   * Validate userProfileId path parameter (CUID)
+   * Validate userId path parameter (auth UUID)
    */
-  static validateUserProfileIdParam(req: Request, res: Response, next: NextFunction): void {
-    const { userProfileId } = req.params;
+  static validateUserIdParam(req: Request, res: Response, next: NextFunction): void {
+    const { userId } = req.params;
 
-    if (!userProfileId || typeof userProfileId !== 'string') {
-      ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.user_profile_id_required'));
+    if (!userId || typeof userId !== 'string') {
+      ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.user_id_required'));
       return;
     }
 
-    const cuidRegex = /^c[a-z0-9]{24}$/;
-    if (!cuidRegex.test(userProfileId)) {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(userId)) {
       ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.id_format'));
       return;
     }
@@ -367,9 +401,8 @@ export class ValidationMiddleware {
    * Validate chapter creation request
    */
   static validateChapterCreation(req: Request, res: Response, next: NextFunction): void {
-    const { audiobookId, title, chapterNumber, duration, startPosition, endPosition } = req.body;
+    const { audiobookId, title, chapterNumber } = req.body;
 
-    // Validate required fields
     if (!audiobookId) {
       ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.audiobook_id_required'));
       return;
@@ -385,110 +418,119 @@ export class ValidationMiddleware {
       return;
     }
 
-    // Parse and validate numeric fields (they come as strings from form-data)
     const chapterNumberNum = parseInt(chapterNumber, 10);
     if (!chapterNumber || isNaN(chapterNumberNum) || chapterNumberNum < 1) {
       ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.chapter_number_positive'));
       return;
     }
 
-    const durationNum = parseInt(duration, 10);
-    if (!duration || isNaN(durationNum) || durationNum < 1) {
-      ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.duration_positive'));
-      return;
-    }
-
-    const startPositionNum = parseInt(startPosition, 10);
-    if (!startPosition || isNaN(startPositionNum) || startPositionNum < 0) {
-      ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.start_position_non_negative'));
-      return;
-    }
-
-    const endPositionNum = parseInt(endPosition, 10);
-    if (!endPosition || isNaN(endPositionNum) || endPositionNum <= startPositionNum) {
-      ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.end_position_greater'));
-      return;
-    }
-
-    // Cover image and audio file are validated by UploadMiddleware.handleImageAndAudioUpload
-    // No need to validate here as middleware ensures both are present
-
-    // Validate description if provided
     if (req.body.description && (typeof req.body.description !== 'string' || req.body.description.length > 1000)) {
       ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.description_length'));
       return;
     }
+
+    if (req.body.minSubscriptionTier !== undefined) {
+      try {
+        const parsedTier = parseOptionalMinSubscriptionTierFromForm(req.body.minSubscriptionTier);
+        if (parsedTier !== undefined) {
+          req.body.minSubscriptionTier = parsedTier;
+        } else {
+          delete req.body.minSubscriptionTier;
+        }
+      } catch (error) {
+        if (error instanceof ApiError) {
+          ResponseHandler.validationError(res, error.message);
+          return;
+        }
+        throw error;
+      }
+    }
+
     next();
   }
 
-  /**
-   * Validate user profile update request
-   */
-  static validateUserProfileUpdate(req: Request, res: Response, next: NextFunction): void {
-    const {
-      username,
-      avatar,
-      preferences,
-    } = req.body;
+  static validatePageCreation(req: Request, res: Response, next: NextFunction): void {
+    const { pageNumber, plainText, richText } = req.body;
 
-    const allowedFields = [
-      'username',
-      'avatar',
-      'preferences',
-    ];
-    const extraFields = Object.keys(req.body).filter(k => !allowedFields.includes(k));
-    if (extraFields.length > 0) {
-      ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.unexpected_fields'));
+    const pageNumberNum = parseInt(pageNumber, 10);
+    if (!pageNumber || isNaN(pageNumberNum) || pageNumberNum < 1) {
+      ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.page_number_positive').replace('{label}', 'pageNumber'));
       return;
     }
 
-    if (username !== undefined) {
-      if (typeof username !== 'string') {
-        ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.username_type'));
-        return;
-      }
-      const trimmed = username.trim();
-      if (trimmed.length < 3 || trimmed.length > 30) {
-        ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.username_length'));
-        return;
-      }
-      const usernameRegex = /^[a-zA-Z0-9_.-]+$/;
-      if (!usernameRegex.test(trimmed)) {
-        ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.username_format'));
-        return;
-      }
-      req.body.username = trimmed;
+    if (!plainText || typeof plainText !== 'string' || plainText.trim().length === 0) {
+      ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.page_plain_text_required').replace('{label}', 'plainText'));
+      return;
     }
 
-    const hasAvatarUpload = Boolean((req as any).avatarFile);
-
-    if (avatar !== undefined && !hasAvatarUpload) {
-      if (typeof avatar !== 'string' || avatar.length > 500) {
-        ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.avatar_url'));
-        return;
-      }
-      try {
-        new URL(avatar);
-      } catch {
-        ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.avatar_url'));
-        return;
-      }
+    if (richText === undefined || richText === null) {
+      ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.page_rich_text_required').replace('{label}', 'richText'));
+      return;
     }
 
-    if (preferences !== undefined) {
-      if (typeof preferences !== 'object' || Array.isArray(preferences)) {
-        ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.preferences_object'));
+    next();
+  }
+
+  static validatePageUpdate(req: Request, res: Response, next: NextFunction): void {
+    if (req.body.pageNumber !== undefined) {
+      const pageNumberNum = parseInt(req.body.pageNumber, 10);
+      if (isNaN(pageNumberNum) || pageNumberNum < 1) {
+        ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.page_number_positive').replace('{label}', 'pageNumber'));
         return;
       }
     }
 
     if (
-      [username, avatar, preferences].every(
-        v => v === undefined
-      ) && !hasAvatarUpload
+      req.body.plainText !== undefined &&
+      (typeof req.body.plainText !== 'string' || req.body.plainText.trim().length === 0)
     ) {
-      ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.no_update_fields'));
+      ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.page_plain_text_required').replace('{label}', 'plainText'));
       return;
+    }
+
+    next();
+  }
+
+  /**
+   * Validate chapter update request (all fields optional)
+   */
+  static validateChapterUpdate(req: Request, res: Response, next: NextFunction): void {
+    if (req.body.title !== undefined) {
+      if (typeof req.body.title !== 'string' || req.body.title.trim().length === 0) {
+        ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.title_required'));
+        return;
+      }
+      if (req.body.title.length > 200) {
+        ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.title_length'));
+        return;
+      }
+    }
+
+    if (
+      req.body.description !== undefined &&
+      req.body.description !== null &&
+      req.body.description !== '' &&
+      (typeof req.body.description !== 'string' || req.body.description.length > 1000)
+    ) {
+      ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.description_length'));
+      return;
+    }
+
+    if (req.body.minSubscriptionTier !== undefined) {
+      try {
+        const parsedTier = parseOptionalMinSubscriptionTierFromForm(req.body.minSubscriptionTier);
+        if (parsedTier !== undefined) {
+          req.body.minSubscriptionTier = parsedTier;
+        } else {
+          req.body.minSubscriptionTier = null;
+        }
+      } catch (error) {
+        if (error instanceof ApiError) {
+          ResponseHandler.validationError(res, error.message);
+          return;
+        }
+        throw error;
+      }
     }
 
     next();
@@ -499,7 +541,7 @@ export class ValidationMiddleware {
    */
   static sanitizeQueryParams(req: Request, _res: Response, next: NextFunction): void {
     // Sanitize string parameters
-    const stringFields = ['genre', 'language', 'author', 'narrator', 'search', 'sortBy'];
+    const stringFields = ['genre', 'author', 'narrator', 'search', 'sortBy'];
 
     for (const field of stringFields) {
       if (req.query[field]) {
@@ -530,7 +572,7 @@ export class ValidationMiddleware {
    * Validate UserAudioBook creation request
    */
   static validateUserAudioBookCreation(req: Request, res: Response, next: NextFunction): void {
-    const { userProfileId, audiobookId, type } = req.body;
+    const { userId, audiobookId, type } = req.body;
 
     if (type !== undefined) {
       ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.user_audiobook_type_not_settable'));
@@ -538,14 +580,13 @@ export class ValidationMiddleware {
     }
 
     // Validate required fields
-    if (!userProfileId || typeof userProfileId !== 'string') {
-      ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.user_profile_id_required'));
+    if (!userId || typeof userId !== 'string') {
+      ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.user_id_required'));
       return;
     }
 
-    // Validate CUID format for userProfileId
-    const cuidRegex = /^c[a-z0-9]{24}$/;
-    if (!cuidRegex.test(userProfileId)) {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(userId)) {
       ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.id_format'));
       return;
     }
@@ -556,6 +597,7 @@ export class ValidationMiddleware {
     }
 
     // Validate CUID format for audiobookId
+    const cuidRegex = /^c[a-z0-9]{24}$/;
     if (!cuidRegex.test(audiobookId)) {
       ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.id_format'));
       return;

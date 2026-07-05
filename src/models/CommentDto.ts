@@ -15,7 +15,7 @@ export interface CommentUserDto {
 
 export interface CommentDto {
    id: string;
-   userProfileId: string;
+   userId: string;
    audiobookId: string;
    parentId?: string | null;
    content: string;
@@ -50,28 +50,6 @@ export interface CommentQueryParams {
    sortOrder?: 'asc' | 'desc';
 }
 
-type CommentUserProfileSelect = {
-   id: string;
-   username: string;
-   avatar: string | null;
-};
-
-export type CommentWithUserProfile = PrismaComment & {
-   userProfile?: CommentUserProfileSelect;
-};
-
-export const commentUserProfileSelect = {
-   id: true,
-   username: true,
-   avatar: true,
-} as const;
-
-export const commentUserInclude = {
-   userProfile: {
-      select: commentUserProfileSelect,
-   },
-} as const;
-
 export function parseCommentMeta(value: Prisma.JsonValue | null): CommentMeta | null {
    if (value === null || value === undefined) {
       return null;
@@ -85,17 +63,20 @@ export function parseCommentMeta(value: Prisma.JsonValue | null): CommentMeta | 
    return null;
 }
 
-export function toCommentUserDto(profile: CommentUserProfileSelect): CommentUserDto {
+export function toCommentUserDto(profile: {
+   username: string;
+   avatar?: string | null;
+}): CommentUserDto {
    return {
       username: profile.username,
-      avatar: profile.avatar,
+      avatar: profile.avatar ?? null,
    };
 }
 
-export function toCommentDto(comment: CommentWithUserProfile): CommentDto {
-   const dto: CommentDto = {
+export function toCommentDto(comment: PrismaComment): CommentDto {
+   return {
       id: comment.id,
-      userProfileId: comment.userProfileId,
+      userId: comment.userId,
       audiobookId: comment.audiobookId,
       parentId: comment.parentId,
       content: comment.content,
@@ -103,12 +84,6 @@ export function toCommentDto(comment: CommentWithUserProfile): CommentDto {
       createdAt: comment.createdAt,
       updatedAt: comment.updatedAt,
    };
-
-   if (comment.userProfile) {
-      dto.user = toCommentUserDto(comment.userProfile);
-   }
-
-   return dto;
 }
 
 export function validateCommentMeta(meta: unknown): CommentMeta {

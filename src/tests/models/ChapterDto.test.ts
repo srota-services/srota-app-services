@@ -56,7 +56,7 @@ describe('ChapterDto', () => {
    const createMockChapterProgressData = (overrides = {}): ChapterProgressData => {
       return {
          id: 'progress-id',
-         userProfileId: 'user-id',
+         userId: 'user-id',
          chapterId: 'chapter-id',
          currentPosition: 300,
          completed: false,
@@ -289,7 +289,7 @@ describe('ChapterDto', () => {
          const progress = createMockChapterProgressData();
 
          expect(progress.id).toBe('progress-id');
-         expect(progress.userProfileId).toBe('user-id');
+         expect(progress.userId).toBe('user-id');
          expect(progress.chapterId).toBe('chapter-id');
          expect(progress.currentPosition).toBe(300);
          expect(progress.completed).toBe(false);

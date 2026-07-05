@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { AudiobookMediaCleanupService } from '../../services/AudiobookMediaCleanupService';
 import { mediaCleanupService } from '../../services/MediaCleanupService';
 import { ImageAssetService } from '../../services/ImageAssetService';
+import { attachPrismaTransaction } from '../helpers/prismaMock';
 
 const mockPublishChapterDeletion = jest.fn().mockResolvedValue(true);
 
@@ -39,12 +40,12 @@ describe('AudiobookMediaCleanupService', () => {
       jest.clearAllMocks();
       mockPublishChapterDeletion.mockResolvedValue(true);
       publishChapterDeletion = mockPublishChapterDeletion;
-      mockPrisma = {
+      mockPrisma = attachPrismaTransaction({
          audioBook: {
             findUnique: jest.fn(),
             delete: jest.fn().mockResolvedValue(undefined),
          },
-      };
+      });
       service = new AudiobookMediaCleanupService(mockPrisma as unknown as PrismaClient);
    });
 

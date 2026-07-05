@@ -8,14 +8,31 @@ import axios, { AxiosResponse } from 'axios';
 import { config } from '../config/env';
 import { ResponseHandler } from '../utils/ResponseHandler';
 import { MessageHandler } from '../utils/MessageHandler';
+import { requireChapterStreamAccess } from '../middleware/StreamAccessMiddleware';
 
 export function createStreamingRoutes(prisma: PrismaClient): Router {
    const router = Router();
+   const chapterStreamAccess = requireChapterStreamAccess(prisma);
 
-   /**
-    * Parameter validation middleware for streaming routes
-    * Ensures parameters are not null, undefined, or empty strings
-    */
+   const resolveProxyAuth = (req: Request): { authHeader?: string; userId?: string } => {
+      const authHeader = req.headers.authorization;
+      if (authHeader) {
+         return { authHeader };
+      }
+
+      const accessToken = req.query['access_token'];
+      if (typeof accessToken === 'string' && accessToken.trim().length > 0) {
+         return { authHeader: `Bearer ${accessToken.trim()}` };
+      }
+
+      const userId = req.query['user'] as string;
+      if (userId) {
+         return { userId };
+      }
+
+      return {};
+   };
+
    const validateStreamingParams = (req: Request, res: Response, next: NextFunction): void => {
       const { chapterId, bitrate, segmentId } = req.params;
 
@@ -46,8 +63,7 @@ export function createStreamingRoutes(prisma: PrismaClient): Router {
 
    const proxyStreamToStreamingService = async (req: Request, res: Response): Promise<void> => {
       try {
-         const authHeader = req.headers.authorization;
-         const userId = req.query['user'] as string;
+         const { authHeader, userId } = resolveProxyAuth(req);
          if (!authHeader && !userId) {
             ResponseHandler.unauthorized(res, MessageHandler.getErrorMessage('unauthorized.not_authenticated'));
             return;
@@ -55,7 +71,7 @@ export function createStreamingRoutes(prisma: PrismaClient): Router {
 
          const externalUrl = `${config.STREAMING_SERVICE_URL}${req.path}${req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''}`;
          const headers: Record<string, string> = {
-            ...(authHeader ? { Authorization: authHeader } : { user_id: userId }),
+            ...(authHeader ? { Authorization: authHeader } : { user_id: userId! }),
          };
 
          const response = await axios.get(externalUrl, {
@@ -79,8 +95,7 @@ export function createStreamingRoutes(prisma: PrismaClient): Router {
 
    const proxyPostToStreamingService = async (req: Request, res: Response): Promise<void> => {
       try {
-         const authHeader = req.headers.authorization;
-         const userId = req.query['user'] as string;
+         const { authHeader, userId } = resolveProxyAuth(req);
          if (!authHeader && !userId) {
             ResponseHandler.unauthorized(res, MessageHandler.getErrorMessage('unauthorized.not_authenticated'));
             return;
@@ -96,7 +111,7 @@ export function createStreamingRoutes(prisma: PrismaClient): Router {
          const externalUrl = `${config.STREAMING_SERVICE_URL}${req.path}`;
          const headers: Record<string, string> = {
             'Content-Type': 'application/json',
-            ...(authHeader ? { Authorization: authHeader } : { user_id: userId }),
+            ...(authHeader ? { Authorization: authHeader } : { user_id: userId! }),
          };
 
          const response = await axios.post(
@@ -124,8 +139,7 @@ export function createStreamingRoutes(prisma: PrismaClient): Router {
     */
    const proxyToStreamingService = async (req: Request, res: Response): Promise<void> => {
       try {
-         const authHeader = req.headers.authorization;
-         const userId = req.query['user'] as string;
+         const { authHeader, userId } = resolveProxyAuth(req);
          if (!authHeader && !userId) {
             ResponseHandler.unauthorized(res, MessageHandler.getErrorMessage('unauthorized.not_authenticated'));
             return;
@@ -135,7 +149,7 @@ export function createStreamingRoutes(prisma: PrismaClient): Router {
          const isBinaryResponse = req.path.includes('/segments/');
          const headers: Record<string, string> = {
             'Content-Type': 'application/json',
-            ...(authHeader ? { Authorization: authHeader } : { user_id: userId }),
+            ...(authHeader ? { Authorization: authHeader } : { user_id: userId! }),
          };
 
          const axiosConfig = {
@@ -225,6 +239,7 @@ export function createStreamingRoutes(prisma: PrismaClient): Router {
    router.get(
       '/chapters/:chapterId/master.m3u8',
       validateStreamingParams,
+      chapterStreamAccess,
       proxyToStreamingService
    );
 
@@ -274,6 +289,7 @@ export function createStreamingRoutes(prisma: PrismaClient): Router {
    router.get(
       '/chapters/:chapterId/:bitrate/playlist.m3u8',
       validateStreamingParams,
+      chapterStreamAccess,
       proxyToStreamingService
    );
 
@@ -335,6 +351,7 @@ export function createStreamingRoutes(prisma: PrismaClient): Router {
    router.get(
       '/chapters/:chapterId/:bitrate/segments/:segmentId',
       validateStreamingParams,
+      chapterStreamAccess,
       proxyToStreamingService
    );
 
@@ -384,6 +401,7 @@ export function createStreamingRoutes(prisma: PrismaClient): Router {
    router.get(
       '/chapters/:chapterId/status',
       validateStreamingParams,
+      chapterStreamAccess,
       proxyToStreamingService
    );
 
@@ -410,6 +428,7 @@ export function createStreamingRoutes(prisma: PrismaClient): Router {
    router.get(
       '/chapters/:chapterId/transcoding',
       validateStreamingParams,
+      chapterStreamAccess,
       proxyToStreamingService
    );
 
@@ -439,6 +458,7 @@ export function createStreamingRoutes(prisma: PrismaClient): Router {
    router.get(
       '/chapters/:chapterId/transcoding/events',
       validateStreamingParams,
+      chapterStreamAccess,
       proxyStreamToStreamingService
    );
 
@@ -504,6 +524,7 @@ export function createStreamingRoutes(prisma: PrismaClient): Router {
    router.post(
       '/chapters/:chapterId/transcode/retry',
       validateStreamingParams,
+      chapterStreamAccess,
       proxyPostToStreamingService
    );
 
@@ -571,6 +592,7 @@ export function createStreamingRoutes(prisma: PrismaClient): Router {
    router.post(
       '/chapters/:chapterId/preload',
       validateStreamingParams,
+      chapterStreamAccess,
       proxyToStreamingService
    );
 
