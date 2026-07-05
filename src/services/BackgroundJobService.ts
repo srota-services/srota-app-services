@@ -7,7 +7,6 @@ import { PrismaClient, UserAudioBookType } from '@prisma/client';
 import { ChapterService } from './ChapterService';
 import { RedisConfigHelper } from '../config/redis';
 import { EntityDeletionCleanupService } from './EntityDeletionCleanupService';
-import { ReputationTierService } from './ReputationTierService';
 import { runInTransaction, runWrite } from '../utils/prismaTransaction';
 import { rethrowServiceError } from '../utils/serviceError';
 import { MessageHandler } from '../utils/MessageHandler';
@@ -50,21 +49,14 @@ export interface ScheduledActivationJobData {
    waitAttempt?: number;
 }
 
-export interface ReputationTierRecalculationJobData {
-   entityType: 'organization' | 'author';
-   entityId: string;
-}
-
 export class BackgroundJobService {
    private progressQueue: Bull.Queue<ProgressCalculationJobData>;
    private downloadQueue: Bull.Queue<OfflineDownloadJobData>;
    private cleanupQueue: Bull.Queue<CleanupJobData>;
    private durationQueue: Bull.Queue<DurationCalculationJobData>;
    private activationQueue: Bull.Queue<ScheduledActivationJobData>;
-   private reputationTierQueue: Bull.Queue<ReputationTierRecalculationJobData>;
    private chapterService: ChapterService;
    private entityDeletionCleanup: EntityDeletionCleanupService;
-   private reputationTierService: ReputationTierService;
 
    constructor(private prisma: PrismaClient) {
       const redisUrl = RedisConfigHelper.getRedisUrl();
@@ -90,15 +82,10 @@ export class BackgroundJobService {
          redis: redisUrl,
       });
 
-      this.reputationTierQueue = new Bull('reputation-tier-recalculation', {
-         redis: redisUrl,
-      });
-
       // Initialize ChapterService with reference to this BackgroundJobService
       // This allows ChapterService to schedule duration calculation jobs
       this.chapterService = new ChapterService(prisma, this);
       this.entityDeletionCleanup = new EntityDeletionCleanupService(prisma);
-      this.reputationTierService = new ReputationTierService(prisma);
 
       this.setupJobProcessors();
       this.setupScheduledJobs();
@@ -286,20 +273,6 @@ export class BackgroundJobService {
             throw error;
          }
       });
-
-      this.reputationTierQueue.process('recalculate-tier', async (job) => {
-         const { entityType, entityId } = job.data;
-
-         try {
-            if (entityType === 'organization') {
-               await this.reputationTierService.recalculateOrganizationTier(entityId);
-            } else {
-               await this.reputationTierService.recalculateAuthorTier(entityId);
-            }
-         } catch (error) {
-            throw error;
-         }
-      });
    }
 
    /**
@@ -343,19 +316,6 @@ export class BackgroundJobService {
          removeOnComplete: true,
          removeOnFail: false,
       });
-   }
-
-   async scheduleReputationTierRecalculation(data: ReputationTierRecalculationJobData): Promise<void> {
-      try {
-         await this.reputationTierQueue.add('recalculate-tier', data, {
-            attempts: 3,
-            backoff: { type: 'exponential', delay: 2000 },
-            removeOnComplete: true,
-            removeOnFail: false,
-         });
-      } catch (error) {
-         rethrowServiceError(error, { operation: 'scheduleReputationTierRecalculation' }, MessageHandler.getErrorMessage('internal.default'));
-      }
    }
 
    /**
@@ -871,7 +831,6 @@ export class BackgroundJobService {
       cleanupQueue: any;
       durationQueue: any;
       activationQueue: any;
-      reputationTierQueue: any;
    }> {
       try {
          const [
@@ -880,14 +839,12 @@ export class BackgroundJobService {
             cleanupStats,
             durationStats,
             activationStats,
-            reputationTierStats,
          ] = await Promise.all([
             this.progressQueue.getJobCounts(),
             this.downloadQueue.getJobCounts(),
             this.cleanupQueue.getJobCounts(),
             this.durationQueue.getJobCounts(),
             this.activationQueue.getJobCounts(),
-            this.reputationTierQueue.getJobCounts(),
          ]);
 
          return {
@@ -896,7 +853,6 @@ export class BackgroundJobService {
             cleanupQueue: cleanupStats,
             durationQueue: durationStats,
             activationQueue: activationStats,
-            reputationTierQueue: reputationTierStats,
          };
       } catch (error) {
          rethrowServiceError(error, { operation: 'getQueueStats' }, MessageHandler.getErrorMessage('internal.default'));
@@ -914,7 +870,6 @@ export class BackgroundJobService {
             this.cleanupQueue.close(),
             this.durationQueue.close(),
             this.activationQueue.close(),
-            this.reputationTierQueue.close(),
          ]);
       } catch (_error) {
          // console.error('Error during queue shutdown:', _error);

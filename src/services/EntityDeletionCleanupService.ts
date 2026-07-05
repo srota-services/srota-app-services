@@ -1,7 +1,7 @@
 /**
  * Cross-entity deletion cleanup for app-service data.
  */
-import { PrismaClient, ReviewerType } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { AudiobookMediaCleanupService } from './AudiobookMediaCleanupService';
 import { mediaCleanupService } from './MediaCleanupService';
 import { runWrite } from '../utils/prismaTransaction';
@@ -41,15 +41,6 @@ export class EntityDeletionCleanupService {
       for (const book of audiobooks) {
          await this.audiobookMediaCleanup.deleteAudiobookWithChapters(book.id);
       }
-
-      await runWrite(this.prisma, async (tx) => {
-         await tx.authorReview.deleteMany({
-            where: {
-               OR: [{ authorId }, { reviewerType: ReviewerType.AUTHOR, reviewerId: authorId }],
-            },
-         });
-         await tx.authorTier.deleteMany({ where: { authorId } });
-      });
    }
 
    async cleanupOrganization(organizationId: string): Promise<void> {
@@ -61,10 +52,5 @@ export class EntityDeletionCleanupService {
       for (const book of audiobooks) {
          await this.audiobookMediaCleanup.deleteAudiobookWithChapters(book.id);
       }
-
-      await runWrite(this.prisma, async (tx) => {
-         await tx.organizationReview.deleteMany({ where: { organizationId } });
-         await tx.organizationTier.deleteMany({ where: { organizationId } });
-      });
    }
 }

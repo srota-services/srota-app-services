@@ -158,56 +158,6 @@ model Language {
   @@map("languages")
 }
 
-model OrganizationTier {
-  id             String              @id @default(cuid())
-  organizationId String              @unique
-  tier           ReputationTierLevel   @default(TIER_3)
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
-
-  @@map("organization_tiers")
-}
-
-model AuthorTier {
-  id        String              @id @default(cuid())
-  authorId  String              @unique
-  tier      ReputationTierLevel   @default(TIER_3)
-  createdAt DateTime            @default(now())
-  updatedAt DateTime            @updatedAt
-
-  @@map("author_tiers")
-}
-
-model OrganizationReview {
-  id             String       @id @default(cuid())
-  organizationId String
-  reviewerType   ReviewerType
-  reviewerId     String
-  rating         Int
-  description    String?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-
-  @@unique([organizationId, reviewerType, reviewerId])
-  @@index([organizationId])
-  @@map("organization_reviews")
-}
-
-model AuthorReview {
-  id           String       @id @default(cuid())
-  authorId     String
-  reviewerType ReviewerType
-  reviewerId   String
-  rating       Int
-  description  String?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-
-  @@unique([authorId, reviewerType, reviewerId])
-  @@index([authorId])
-  @@map("author_reviews")
-}
-
 // Junction table for many-to-many relationship between AudioBook and Genre
 model AudioBookGenre {
   id          String @id @default(cuid())
@@ -357,20 +307,6 @@ enum SubscriptionTierLevel {
   BASE
   STANDARD
   PREMIUM
-}
-
-enum ReputationTierLevel {
-  TIER_1
-  TIER_2
-  TIER_3
-  TIER_4
-  TIER_5
-}
-
-enum ReviewerType {
-  USER
-  AUTHOR
-  ORGANIZATION
 }
 
 // Chapter model for audiobook chapters
