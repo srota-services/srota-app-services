@@ -18,6 +18,12 @@ export function createUserProfileRoutes(prisma: PrismaClient): Router {
       userProfileController.getProfile
    );
 
+   // Get a specific user's profile (avatar, username)
+   router.get(
+      '/users/:userId/profile',
+      userProfileController.getProfileByUserId
+   );
+
    // Update current user's profile
    router.put(
       '/user/profile',

@@ -38,6 +38,47 @@ export class UserProfileController {
 
    /**
     * @swagger
+    * /api/v1/users/{userId}/profile:
+    *   get:
+    *     summary: Get a user's app profile by user ID
+    *     description: Retrieve username and avatar for a specific user
+    *     tags: [Auth]
+    *     parameters:
+    *       - in: path
+    *         name: userId
+    *         required: true
+    *         schema:
+    *           type: string
+    *     responses:
+    *       200:
+    *         description: Profile retrieved successfully
+    *       404:
+    *         $ref: '#/components/responses/NotFound'
+    *       401:
+    *         $ref: '#/components/responses/Unauthorized'
+    *       500:
+    *         $ref: '#/components/responses/InternalServerError'
+    */
+   getProfileByUserId = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
+      const userId = req.params['userId'];
+
+      if (!userId) {
+         ResponseHandler.validationError(res, 'User ID is required', req.originalUrl);
+         return;
+      }
+
+      const profile = await this.userProfileService.getUserProfile(userId);
+
+      if (!profile) {
+         ResponseHandler.notFound(res, 'User profile', req.originalUrl);
+         return;
+      }
+
+      ResponseHandler.success(res, profile, MessageHandler.getSuccessMessage('auth.profile_retrieved'));
+   });
+
+   /**
+    * @swagger
     * /api/v1/user/profile:
     *   put:
     *     summary: Update current user's app profile
