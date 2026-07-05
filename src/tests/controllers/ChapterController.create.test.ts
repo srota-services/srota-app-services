@@ -29,7 +29,7 @@ describe('ChapterController.createChapter', () => {
 
    beforeEach(() => {
       mockPrisma = {
-         userProfile: {
+         user: {
             findUnique: jest.fn().mockResolvedValue({ id: 'profile-1' }),
          },
          audioBook: {

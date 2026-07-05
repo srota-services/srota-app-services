@@ -23,12 +23,6 @@ const APP_IMAGE_SPECS: SpecRow[] = [
    { category: 'chapter', variantKey: 'landscape_20_11', actualWidth: 800, actualHeight: 440, aspectRatioWidth: 20, aspectRatioHeight: 11, recommendedMaxWidth: 960, recommendedMaxHeight: 960 },
    { category: 'chapter', variantKey: 'square_56', actualWidth: 224, actualHeight: 224, aspectRatioWidth: 1, aspectRatioHeight: 1, recommendedMaxWidth: 960, recommendedMaxHeight: 960 },
    { category: 'chapter', variantKey: 'square_960', actualWidth: 960, actualHeight: 960, aspectRatioWidth: 1, aspectRatioHeight: 1, recommendedMaxWidth: 960, recommendedMaxHeight: 960 },
-   // user — recommended max 480×480
-   { category: 'user', variantKey: 'square_64', actualWidth: 256, actualHeight: 256, aspectRatioWidth: 1, aspectRatioHeight: 1, recommendedMaxWidth: 480, recommendedMaxHeight: 480 },
-   { category: 'user', variantKey: 'square_120', actualWidth: 480, actualHeight: 480, aspectRatioWidth: 1, aspectRatioHeight: 1, recommendedMaxWidth: 480, recommendedMaxHeight: 480 },
-   // author — recommended max 480×480
-   { category: 'author', variantKey: 'square_64', actualWidth: 256, actualHeight: 256, aspectRatioWidth: 1, aspectRatioHeight: 1, recommendedMaxWidth: 480, recommendedMaxHeight: 480 },
-   { category: 'author', variantKey: 'square_120', actualWidth: 480, actualHeight: 480, aspectRatioWidth: 1, aspectRatioHeight: 1, recommendedMaxWidth: 480, recommendedMaxHeight: 480 },
 ];
 
 export async function seedImagePlaceholderSpecs(prisma: PrismaClient): Promise<void> {
@@ -56,6 +50,4 @@ export async function seedImagePlaceholderSpecs(prisma: PrismaClient): Promise<v
 export const APP_PRIMARY_VARIANT_KEYS: Record<ImageCategory, string> = {
    audiobook: 'portrait_7_10',
    chapter: 'square_960',
-   user: 'square_120',
-   author: 'square_120',
 };

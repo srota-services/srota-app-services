@@ -32,7 +32,7 @@ export class BookmarkService {
    /**
     * Create a chapter bookmark for the authenticated user
     */
-   async createBookmark(userProfileId: string, bookmarkData: CreateBookmarkRequest): Promise<BookmarkWithRelations> {
+   async createBookmark(userId: string, bookmarkData: CreateBookmarkRequest): Promise<BookmarkWithRelations> {
       const chapter = await this.prisma.chapter.findUnique({
          where: { id: bookmarkData.chapterId },
       });
@@ -46,8 +46,8 @@ export class BookmarkService {
 
       const existing = await this.prisma.bookmark.findUnique({
          where: {
-            userProfileId_chapterId: {
-               userProfileId,
+            userId_chapterId: {
+               userId,
                chapterId: bookmarkData.chapterId,
             },
          },
@@ -64,7 +64,7 @@ export class BookmarkService {
          const bookmark = await runWrite(this.prisma, async (tx) =>
             tx.bookmark.create({
                data: {
-                  userProfileId,
+                  userId,
                   chapterId: bookmarkData.chapterId,
                },
                include: bookmarkChapterInclude,
@@ -94,7 +94,7 @@ export class BookmarkService {
    /**
     * Get bookmarks for a user
     */
-   async getBookmarks(userProfileId: string, queryParams?: BookmarkQueryParams): Promise<{
+   async getBookmarks(userId: string, queryParams?: BookmarkQueryParams): Promise<{
       bookmarks: BookmarkWithRelations[];
       totalCount: number;
    }> {
@@ -109,7 +109,7 @@ export class BookmarkService {
          } = queryParams || {};
 
          const skip = (page - 1) * limit;
-         const whereClause: Prisma.BookmarkWhereInput = { userProfileId };
+         const whereClause: Prisma.BookmarkWhereInput = { userId };
 
          if (audiobookId) {
             whereClause.chapter = { audiobookId };
@@ -145,12 +145,12 @@ export class BookmarkService {
    /**
     * Get a specific bookmark by ID
     */
-   async getBookmarkById(userProfileId: string, bookmarkId: string): Promise<BookmarkWithRelations> {
+   async getBookmarkById(userId: string, bookmarkId: string): Promise<BookmarkWithRelations> {
       try {
          const bookmark = await this.prisma.bookmark.findFirst({
             where: {
                id: bookmarkId,
-               userProfileId,
+               userId,
             },
             include: bookmarkChapterInclude,
          });
@@ -179,12 +179,12 @@ export class BookmarkService {
    /**
     * Delete a bookmark
     */
-   async deleteBookmark(userProfileId: string, bookmarkId: string): Promise<void> {
+   async deleteBookmark(userId: string, bookmarkId: string): Promise<void> {
       try {
          const bookmark = await this.prisma.bookmark.findFirst({
             where: {
                id: bookmarkId,
-               userProfileId,
+               userId,
             },
             include: { chapter: { select: { audiobookId: true } } },
          });
@@ -220,7 +220,7 @@ export class BookmarkService {
    /**
     * Create a new note
     */
-   async createNote(userProfileId: string, noteData: CreateNoteRequest): Promise<NoteData> {
+   async createNote(userId: string, noteData: CreateNoteRequest): Promise<NoteData> {
       try {
          if (!noteData.audiobookId && !noteData.chapterId) {
             throw new ApiError('Either audiobookId or chapterId must be provided', 400);
@@ -247,7 +247,7 @@ export class BookmarkService {
          const note = await runWrite(this.prisma, async (tx) =>
             tx.note.create({
                data: {
-                  userProfileId,
+                  userId,
                   ...noteData,
                },
             }),
@@ -258,7 +258,7 @@ export class BookmarkService {
          });
          return {
             id: note.id,
-            userProfileId: note.userProfileId,
+            userId: note.userId,
             audiobookId: note.audiobookId || undefined,
             chapterId: note.chapterId || undefined,
             title: note.title || undefined,
@@ -279,7 +279,7 @@ export class BookmarkService {
    /**
     * Get notes for a user
     */
-   async getNotes(userProfileId: string, queryParams?: BookmarkNoteQueryParams): Promise<{
+   async getNotes(userId: string, queryParams?: BookmarkNoteQueryParams): Promise<{
       notes: NoteWithRelations[];
       totalCount: number;
    }> {
@@ -295,7 +295,7 @@ export class BookmarkService {
          } = queryParams || {};
 
          const skip = (page - 1) * limit;
-         const whereClause: Prisma.NoteWhereInput = { userProfileId };
+         const whereClause: Prisma.NoteWhereInput = { userId };
 
          if (audiobookId) {
             whereClause.audiobookId = audiobookId;
@@ -341,7 +341,7 @@ export class BookmarkService {
          return {
             notes: notes.map(note => ({
                id: note.id,
-               userProfileId: note.userProfileId,
+               userId: note.userId,
                audiobookId: note.audiobookId || undefined,
                chapterId: note.chapterId || undefined,
                title: note.title || undefined,
@@ -361,12 +361,12 @@ export class BookmarkService {
    /**
     * Get a specific note by ID
     */
-   async getNoteById(userProfileId: string, noteId: string): Promise<NoteWithRelations> {
+   async getNoteById(userId: string, noteId: string): Promise<NoteWithRelations> {
       try {
          const note = await this.prisma.note.findFirst({
             where: {
                id: noteId,
-               userProfileId,
+               userId,
             },
             include: {
                audiobook: {
@@ -392,7 +392,7 @@ export class BookmarkService {
 
          return {
             id: note.id,
-            userProfileId: note.userProfileId,
+            userId: note.userId,
             audiobookId: note.audiobookId || undefined,
             chapterId: note.chapterId || undefined,
             title: note.title || undefined,
@@ -413,12 +413,12 @@ export class BookmarkService {
    /**
     * Update a note
     */
-   async updateNote(userProfileId: string, noteId: string, updateData: UpdateNoteRequest): Promise<NoteData> {
+   async updateNote(userId: string, noteId: string, updateData: UpdateNoteRequest): Promise<NoteData> {
       try {
          const existingNote = await this.prisma.note.findFirst({
             where: {
                id: noteId,
-               userProfileId,
+               userId,
             },
          });
 
@@ -438,7 +438,7 @@ export class BookmarkService {
          });
          return {
             id: note.id,
-            userProfileId: note.userProfileId,
+            userId: note.userId,
             audiobookId: note.audiobookId || undefined,
             chapterId: note.chapterId || undefined,
             title: note.title || undefined,
@@ -459,12 +459,12 @@ export class BookmarkService {
    /**
     * Delete a note
     */
-   async deleteNote(userProfileId: string, noteId: string): Promise<void> {
+   async deleteNote(userId: string, noteId: string): Promise<void> {
       try {
          const note = await this.prisma.note.findFirst({
             where: {
                id: noteId,
-               userProfileId,
+               userId,
             },
          });
 
@@ -491,7 +491,7 @@ export class BookmarkService {
    /**
     * Get combined bookmarks and notes for a user
     */
-   async getBookmarksAndNotes(userProfileId: string, queryParams?: BookmarkNoteQueryParams): Promise<BookmarkNoteResponse> {
+   async getBookmarksAndNotes(userId: string, queryParams?: BookmarkNoteQueryParams): Promise<BookmarkNoteResponse> {
       try {
          const bookmarkParams: BookmarkQueryParams = {
             sortBy: queryParams?.sortBy === 'updatedAt' ? 'updatedAt' : 'createdAt',
@@ -503,8 +503,8 @@ export class BookmarkService {
          if (queryParams?.sortOrder) bookmarkParams.sortOrder = queryParams.sortOrder;
 
          const [bookmarksResult, notesResult] = await Promise.all([
-            this.getBookmarks(userProfileId, bookmarkParams),
-            this.getNotes(userProfileId, queryParams),
+            this.getBookmarks(userId, bookmarkParams),
+            this.getNotes(userId, queryParams),
          ]);
 
          return {
@@ -524,17 +524,17 @@ export class BookmarkService {
    /**
     * Get bookmark and note statistics for a user
     */
-   async getBookmarkNoteStats(userProfileId: string): Promise<BookmarkNoteStats> {
+   async getBookmarkNoteStats(userId: string): Promise<BookmarkNoteStats> {
       try {
          const [totalBookmarks, totalNotes, bookmarkRows, notesByAudiobook] = await Promise.all([
             this.prisma.bookmark.count({
-               where: { userProfileId },
+               where: { userId },
             }),
             this.prisma.note.count({
-               where: { userProfileId },
+               where: { userId },
             }),
             this.prisma.bookmark.findMany({
-               where: { userProfileId },
+               where: { userId },
                select: {
                   chapter: {
                      select: { audiobookId: true },
@@ -543,7 +543,7 @@ export class BookmarkService {
             }),
             this.prisma.note.groupBy({
                by: ['audiobookId'],
-               where: { userProfileId },
+               where: { userId },
                _count: { audiobookId: true },
             }),
          ]);

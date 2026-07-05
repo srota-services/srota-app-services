@@ -53,7 +53,7 @@ export function createUserAudioBookRoutes(prisma: PrismaClient): Router {
 
    /**
     * @swagger
-    * /api/v1/user-audiobooks/user/{userProfileId}:
+    * /api/v1/user-audiobooks/user/{userId}:
     *   get:
     *     summary: Get all audiobooks for a user
     *     tags: [UserAudioBooks]
@@ -64,10 +64,10 @@ export function createUserAudioBookRoutes(prisma: PrismaClient): Router {
     *         $ref: '#/components/responses/InternalServerError'
     */
    router.get(
-      '/user/:userProfileId',
+      '/user/:userId',
       ValidationMiddleware.validatePagination,
       ValidationMiddleware.sanitizeQueryParams,
-      userAudioBookController.getUserAudioBooksByUserProfileId
+      userAudioBookController.getUserAudioBooksByUserId
    );
 
    /**

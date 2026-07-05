@@ -791,12 +791,12 @@ export class ChapterService {
    /**
     * Get chapter progress for a user
     */
-   async getChapterProgress(userProfileId: string, chapterId: string): Promise<ChapterProgressData | null> {
+   async getChapterProgress(userId: string, chapterId: string): Promise<ChapterProgressData | null> {
       try {
          const progress = await this.prisma.chapterProgress.findUnique({
             where: {
-               userProfileId_chapterId: {
-                  userProfileId,
+               userId_chapterId: {
+                  userId,
                   chapterId,
                },
             },
@@ -815,7 +815,7 @@ export class ChapterService {
     * Update chapter progress for a user
     */
    async updateChapterProgress(
-      userProfileId: string,
+      userId: string,
       chapterId: string,
       progressData: UpdateChapterProgressRequest
    ): Promise<ChapterProgressData> {
@@ -837,8 +837,8 @@ export class ChapterService {
          const progress = await runWrite(this.prisma, async (tx) =>
             tx.chapterProgress.upsert({
                where: {
-                  userProfileId_chapterId: {
-                     userProfileId,
+                  userId_chapterId: {
+                     userId,
                      chapterId,
                   },
                },
@@ -848,7 +848,7 @@ export class ChapterService {
                   lastListenedAt: new Date(),
                },
                create: {
-                  userProfileId,
+                  userId,
                   chapterId,
                   currentPosition: progressData.currentPosition,
                   completed: progressData.completed || false,
@@ -869,10 +869,10 @@ export class ChapterService {
    /**
     * Get chapter with user progress
     */
-   async getChapterWithProgress(userProfileId: string, chapterId: string): Promise<ChapterWithProgress> {
+   async getChapterWithProgress(userId: string, chapterId: string): Promise<ChapterWithProgress> {
       try {
          const chapter = await this.getChapterById(chapterId);
-         const userProgress = await this.getChapterProgress(userProfileId, chapterId);
+         const userProgress = await this.getChapterProgress(userId, chapterId);
 
          const overallProgress = userProgress && chapter.duration
             ? (userProgress.currentPosition / chapter.duration) * 100
@@ -894,9 +894,9 @@ export class ChapterService {
    /**
     * Get chapter navigation (previous/next chapters)
     */
-   async getChapterNavigation(userProfileId: string, chapterId: string): Promise<ChapterNavigation> {
+   async getChapterNavigation(userId: string, chapterId: string): Promise<ChapterNavigation> {
       try {
-         const currentChapter = await this.getChapterWithProgress(userProfileId, chapterId);
+         const currentChapter = await this.getChapterWithProgress(userId, chapterId);
 
          // Get all chapters for the audiobook ordered by chapter number
          const allChapters = await this.prisma.chapter.findMany({
@@ -907,11 +907,11 @@ export class ChapterService {
          const currentIndex = allChapters.findIndex(ch => ch.id === chapterId);
 
          const previousChapter = currentIndex > 0
-            ? await this.getChapterWithProgress(userProfileId, allChapters[currentIndex - 1]!.id)
+            ? await this.getChapterWithProgress(userId, allChapters[currentIndex - 1]!.id)
             : undefined;
 
          const nextChapter = currentIndex < allChapters.length - 1
-            ? await this.getChapterWithProgress(userProfileId, allChapters[currentIndex + 1]!.id)
+            ? await this.getChapterWithProgress(userId, allChapters[currentIndex + 1]!.id)
             : undefined;
 
          return {
@@ -932,13 +932,13 @@ export class ChapterService {
    /**
     * Get all chapters with progress for an audiobook
     */
-   async getChaptersWithProgress(userProfileId: string, audiobookId: string): Promise<ChapterWithProgress[]> {
+   async getChaptersWithProgress(userId: string, audiobookId: string): Promise<ChapterWithProgress[]> {
       try {
          const { chapters } = await this.getChaptersByAudiobookId(audiobookId);
 
          const chaptersWithProgress = await Promise.all(
             chapters.map(async (chapter) => {
-               const userProgress = await this.getChapterProgress(userProfileId, chapter.id);
+               const userProgress = await this.getChapterProgress(userId, chapter.id);
                const overallProgress = userProgress && chapter.duration
                   ? (userProgress.currentPosition / chapter.duration) * 100
                   : 0;
@@ -974,7 +974,7 @@ export class ChapterService {
    /**
     * Calculate audiobook progress as the sum of chapter progress positions (seconds).
     */
-   async calculateAudiobookProgress(userProfileId: string, audiobookId: string): Promise<number> {
+   async calculateAudiobookProgress(userId: string, audiobookId: string): Promise<number> {
       try {
          const chapters = await this.prisma.chapter.findMany({
             where: { audiobookId },
@@ -987,7 +987,7 @@ export class ChapterService {
 
          const progressRows = await this.prisma.chapterProgress.findMany({
             where: {
-               userProfileId,
+               userId,
                chapterId: { in: chapters.map((c) => c.id) },
             },
             select: { currentPosition: true },

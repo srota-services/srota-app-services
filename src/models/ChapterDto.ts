@@ -83,7 +83,7 @@ export interface UpdateChapterRequest {
 // Chapter progress tracking
 export interface ChapterProgressData {
    id: string;
-   userProfileId: string;
+   userId: string;
    chapterId: string;
    currentPosition: number;
    completed: boolean;

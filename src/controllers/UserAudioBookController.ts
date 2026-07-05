@@ -29,9 +29,9 @@ export class UserAudioBookController {
     *         application/json:
     *           schema:
     *             type: object
-    *             required: [userProfileId, audiobookId]
+    *             required: [userId, audiobookId]
     *             properties:
-    *               userProfileId:
+    *               userId:
     *                 type: string
     *               audiobookId:
     *                 type: string
@@ -66,7 +66,7 @@ export class UserAudioBookController {
     *       - $ref: '#/components/parameters/LimitParam'
     *       - $ref: '#/components/parameters/SortByParam'
     *       - $ref: '#/components/parameters/SortOrderParam'
-    *       - name: userProfileId
+    *       - name: userId
     *         in: query
     *         schema:
     *           type: string
@@ -91,7 +91,7 @@ export class UserAudioBookController {
          limit: req.query['limit'] ? parseInt(req.query['limit'] as string, 10) : 10,
          sortBy: req.query['sortBy'] as string || 'createdAt',
          sortOrder: (req.query['sortOrder'] as 'asc' | 'desc') || 'desc',
-         userProfileId: req.query['userProfileId'] as string,
+         userId: req.query['userId'] as string,
          audiobookId: req.query['audiobookId'] as string,
          type: req.query['type'] as any
       };
@@ -158,12 +158,12 @@ export class UserAudioBookController {
 
    /**
     * @swagger
-    * /api/v1/user-audiobooks/user/{userProfileId}:
+    * /api/v1/user-audiobooks/user/{userId}:
     *   get:
     *     summary: Get all audiobooks for a user
     *     tags: [UserAudioBooks]
     *     parameters:
-    *       - name: userProfileId
+    *       - name: userId
     *         in: path
     *         required: true
     *         schema:
@@ -176,8 +176,8 @@ export class UserAudioBookController {
     *       500:
     *         $ref: '#/components/responses/InternalServerError'
     */
-   getUserAudioBooksByUserProfileId = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
-      const { userProfileId } = req.params;
+   getUserAudioBooksByUserId = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
+      const { userId } = req.params;
       const queryParams: UserAudioBookQueryParams = {
          page: req.query['page'] ? parseInt(req.query['page'] as string, 10) : 1,
          limit: req.query['limit'] ? parseInt(req.query['limit'] as string, 10) : 10,
@@ -185,8 +185,8 @@ export class UserAudioBookController {
          sortOrder: (req.query['sortOrder'] as 'asc' | 'desc') || 'desc'
       };
 
-      const { userAudioBooks, totalCount } = await this.userAudioBookService.getUserAudioBooksByUserProfileId(
-         userProfileId as string,
+      const { userAudioBooks, totalCount } = await this.userAudioBookService.getUserAudioBooksByUserId(
+         userId as string,
          queryParams
       );
 

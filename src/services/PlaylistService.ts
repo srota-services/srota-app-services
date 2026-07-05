@@ -22,7 +22,7 @@ import { runWrite } from '../utils/prismaTransaction';
 export class PlaylistService {
    constructor(private prisma: PrismaClient) {}
 
-   async createPlaylist(userProfileId: string, data: CreatePlaylistRequest): Promise<PlaylistDto> {
+   async createPlaylist(userId: string, data: CreatePlaylistRequest): Promise<PlaylistDto> {
       const name = data.name.trim();
       if (!name) {
          throw new ApiError(
@@ -35,7 +35,7 @@ export class PlaylistService {
       const playlist = await runWrite(this.prisma, async (tx) =>
          tx.playlist.create({
             data: {
-               userProfileId,
+               userId,
                name,
                description: data.description?.trim() || null,
                isPublic: data.isPublic ?? false,
@@ -43,12 +43,12 @@ export class PlaylistService {
          }),
       );
 
-      emitCacheInvalidation('playlist', 'created', playlist.id, { userId: userProfileId });
+      emitCacheInvalidation('playlist', 'created', playlist.id, { userId: userId });
       return toPlaylistDto(playlist, []);
    }
 
    async getPlaylists(
-      userProfileId: string,
+      userId: string,
       query: PlaylistQueryParams
    ): Promise<{ playlists: PlaylistDto[]; totalCount: number }> {
       const page = query.page ?? 1;
@@ -57,7 +57,7 @@ export class PlaylistService {
       const sortBy = query.sortBy ?? 'createdAt';
       const sortOrder = query.sortOrder ?? 'desc';
 
-      const where: Prisma.PlaylistWhereInput = { userProfileId };
+      const where: Prisma.PlaylistWhereInput = { userId };
       if (query.isPublic !== undefined) {
          where.isPublic = query.isPublic;
       }
@@ -81,7 +81,7 @@ export class PlaylistService {
       };
    }
 
-   async getPlaylistById(id: string, userProfileId: string): Promise<PlaylistDto> {
+   async getPlaylistById(id: string, userId: string): Promise<PlaylistDto> {
       const playlist = await this.prisma.playlist.findUnique({
          where: { id },
          include: {
@@ -97,7 +97,7 @@ export class PlaylistService {
          );
       }
 
-      if (playlist.userProfileId !== userProfileId) {
+      if (playlist.userId !== userId) {
          throw ApiError.forbidden(MessageHandler.getErrorMessage('playlists.access_denied'));
       }
 
@@ -106,10 +106,10 @@ export class PlaylistService {
 
    async updatePlaylist(
       id: string,
-      userProfileId: string,
+      userId: string,
       data: UpdatePlaylistRequest
    ): Promise<PlaylistDto> {
-      const existing = await this.requirePlaylistOwner(id, userProfileId);
+      const existing = await this.requirePlaylistOwner(id, userId);
 
       const updateData: Prisma.PlaylistUpdateInput = {};
       if (data.name !== undefined) {
@@ -146,22 +146,22 @@ export class PlaylistService {
          }),
       );
 
-      emitCacheInvalidation('playlist', 'updated', id, { userId: userProfileId });
+      emitCacheInvalidation('playlist', 'updated', id, { userId: userId });
       return toPlaylistDto(updated, updated.items);
    }
 
-   async deletePlaylist(id: string, userProfileId: string): Promise<void> {
-      await this.requirePlaylistOwner(id, userProfileId);
+   async deletePlaylist(id: string, userId: string): Promise<void> {
+      await this.requirePlaylistOwner(id, userId);
       await runWrite(this.prisma, async (tx) => tx.playlist.delete({ where: { id } }));
-      emitCacheInvalidation('playlist', 'deleted', id, { userId: userProfileId });
+      emitCacheInvalidation('playlist', 'deleted', id, { userId: userId });
    }
 
    async addPlaylistItem(
       playlistId: string,
-      userProfileId: string,
+      userId: string,
       data: CreatePlaylistItemRequest
    ): Promise<PlaylistItemDto> {
-      await this.requirePlaylistOwner(playlistId, userProfileId);
+      await this.requirePlaylistOwner(playlistId, userId);
 
       const audiobook = await this.prisma.audioBook.findUnique({
          where: { id: data.audiobookId },
@@ -215,9 +215,9 @@ export class PlaylistService {
 
    async getPlaylistItems(
       playlistId: string,
-      userProfileId: string
+      userId: string
    ): Promise<PlaylistItemDto[]> {
-      await this.requirePlaylistOwner(playlistId, userProfileId);
+      await this.requirePlaylistOwner(playlistId, userId);
 
       const items = await this.prisma.playlistItem.findMany({
          where: { playlistId },
@@ -230,10 +230,10 @@ export class PlaylistService {
    async updatePlaylistItem(
       playlistId: string,
       itemId: string,
-      userProfileId: string,
+      userId: string,
       data: UpdatePlaylistItemRequest
    ): Promise<PlaylistItemDto> {
-      await this.requirePlaylistOwner(playlistId, userProfileId);
+      await this.requirePlaylistOwner(playlistId, userId);
 
       const item = await this.prisma.playlistItem.findFirst({
          where: { id: itemId, playlistId },
@@ -260,9 +260,9 @@ export class PlaylistService {
    async deletePlaylistItem(
       playlistId: string,
       itemId: string,
-      userProfileId: string
+      userId: string
    ): Promise<void> {
-      await this.requirePlaylistOwner(playlistId, userProfileId);
+      await this.requirePlaylistOwner(playlistId, userId);
 
       const item = await this.prisma.playlistItem.findFirst({
          where: { id: itemId, playlistId },
@@ -279,7 +279,7 @@ export class PlaylistService {
       emitCacheInvalidation('playlist-item', 'deleted', itemId, { playlistId });
    }
 
-   private async requirePlaylistOwner(playlistId: string, userProfileId: string) {
+   private async requirePlaylistOwner(playlistId: string, userId: string) {
       const playlist = await this.prisma.playlist.findUnique({ where: { id: playlistId } });
       if (!playlist) {
          throw new ApiError(
@@ -288,7 +288,7 @@ export class PlaylistService {
             ErrorType.NOT_FOUND
          );
       }
-      if (playlist.userProfileId !== userProfileId) {
+      if (playlist.userId !== userId) {
          throw ApiError.forbidden(MessageHandler.getErrorMessage('playlists.access_denied'));
       }
       return playlist;

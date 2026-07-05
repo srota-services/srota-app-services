@@ -8,7 +8,7 @@ import { DownloadStatus } from '@prisma/client';
 // Base OfflineDownload interface
 export interface OfflineDownloadData {
    id: string;
-   userProfileId: string;
+   userId: string;
    audiobookId: string;
    status: DownloadStatus;
    progress: number; // Download progress percentage (0-100)
@@ -97,7 +97,7 @@ export interface DownloadStats {
 
 // Download job data for Bull queue
 export interface DownloadJobData {
-   userProfileId: string;
+   userId: string;
    audiobookId: string;
    downloadId: string;
    quality?: 'high' | 'medium' | 'low';

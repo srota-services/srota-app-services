@@ -19,10 +19,7 @@ import { requireGlobalAdmin } from './middleware/RoleMiddleware';
 import { QueueFactory } from './config/queue';
 import { RabbitMQFactory } from './config/rabbitmq';
 import { TranscodingWorkerFactory } from './workers/TranscodingWorker';
-import { UserConsumerWorkerFactory } from './workers/UserConsumerWorker';
 import { SubscriptionConsumerWorkerFactory } from './workers/SubscriptionConsumerWorker';
-import { AuthorConsumerWorkerFactory } from './workers/AuthorConsumerWorker';
-import { OrganizationConsumerWorkerFactory } from './workers/OrganizationConsumerWorker';
 import { EntityDeletionConsumerWorkerFactory } from './workers/EntityDeletionConsumerWorker';
 import { ChapterTranscodingCompletedConsumerWorkerFactory } from './workers/ChapterTranscodingCompletedConsumerWorker';
 import { prisma } from './lib/prisma';
@@ -86,17 +83,8 @@ queueManager.createCleanupQueue();
       // Start transcoding worker
       await TranscodingWorkerFactory.startWorker(prisma);
 
-      // Start user consumer worker
-      await UserConsumerWorkerFactory.startWorker(prisma);
-
       // Start subscription consumer worker
       await SubscriptionConsumerWorkerFactory.startWorker();
-
-      // Start author consumer worker
-      await AuthorConsumerWorkerFactory.startWorker(prisma);
-
-      // Start organization consumer worker
-      await OrganizationConsumerWorkerFactory.startWorker(prisma);
 
       // Start entity deletion consumer worker
       await EntityDeletionConsumerWorkerFactory.startWorker(prisma);

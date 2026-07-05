@@ -15,7 +15,7 @@ export interface ListeningHistoryAudiobookSummary {
 
 export interface ListeningHistoryDto {
    id: string;
-   userProfileId: string;
+   userId: string;
    audiobookId: string;
    currentPosition: number;
    completed: boolean;
@@ -44,7 +44,7 @@ type ListeningHistoryWithAudiobook = PrismaListeningHistory & {
 export function toListeningHistoryDto(history: PrismaListeningHistory): ListeningHistoryDto {
    return {
       id: history.id,
-      userProfileId: history.userProfileId,
+      userId: history.userId,
       audiobookId: history.audiobookId,
       currentPosition: history.currentPosition,
       completed: history.completed,

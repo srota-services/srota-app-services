@@ -833,7 +833,7 @@ const options: swaggerJsdoc.Options = {
                type: 'object',
                properties: {
                   id: { type: 'string' },
-                  userProfileId: { type: 'string' },
+                  userId: { type: 'string' },
                   audiobookId: { type: 'string' },
                   parentId: { type: 'string', nullable: true },
                   content: { type: 'string' },
@@ -868,7 +868,7 @@ const options: swaggerJsdoc.Options = {
                type: 'object',
                properties: {
                   id: { type: 'string' },
-                  userProfileId: { type: 'string' },
+                  userId: { type: 'string' },
                   audiobookId: { type: 'string' },
                   rating: { type: 'integer', minimum: 1, maximum: 5 },
                   createdAt: { type: 'string', format: 'date-time' },
@@ -890,69 +890,11 @@ const options: swaggerJsdoc.Options = {
                   rating: { type: 'integer', minimum: 1, maximum: 5 }
                }
             },
-            OrganizationReview: {
-               type: 'object',
-               properties: {
-                  id: { type: 'string' },
-                  organizationId: { type: 'string' },
-                  reviewerType: { type: 'string', enum: ['USER', 'AUTHOR', 'ORGANIZATION'] },
-                  reviewerId: { type: 'string' },
-                  rating: { type: 'integer', minimum: 1, maximum: 5 },
-                  description: { type: 'string', nullable: true },
-                  createdAt: { type: 'string', format: 'date-time' },
-                  updatedAt: { type: 'string', format: 'date-time' }
-               }
-            },
-            CreateOrganizationReviewRequest: {
-               type: 'object',
-               required: ['organizationId', 'rating'],
-               properties: {
-                  organizationId: { type: 'string' },
-                  rating: { type: 'integer', minimum: 1, maximum: 5 },
-                  description: { type: 'string', maxLength: 2000 }
-               }
-            },
-            UpdateOrganizationReviewRequest: {
-               type: 'object',
-               properties: {
-                  rating: { type: 'integer', minimum: 1, maximum: 5 },
-                  description: { type: 'string', nullable: true, maxLength: 2000 }
-               }
-            },
-            AuthorReview: {
-               type: 'object',
-               properties: {
-                  id: { type: 'string' },
-                  authorId: { type: 'string' },
-                  reviewerType: { type: 'string', enum: ['USER', 'AUTHOR', 'ORGANIZATION'] },
-                  reviewerId: { type: 'string' },
-                  rating: { type: 'integer', minimum: 1, maximum: 5 },
-                  description: { type: 'string', nullable: true },
-                  createdAt: { type: 'string', format: 'date-time' },
-                  updatedAt: { type: 'string', format: 'date-time' }
-               }
-            },
-            CreateAuthorReviewRequest: {
-               type: 'object',
-               required: ['authorId', 'rating'],
-               properties: {
-                  authorId: { type: 'string' },
-                  rating: { type: 'integer', minimum: 1, maximum: 5 },
-                  description: { type: 'string', maxLength: 2000 }
-               }
-            },
-            UpdateAuthorReviewRequest: {
-               type: 'object',
-               properties: {
-                  rating: { type: 'integer', minimum: 1, maximum: 5 },
-                  description: { type: 'string', nullable: true, maxLength: 2000 }
-               }
-            },
             Favorite: {
                type: 'object',
                properties: {
                   id: { type: 'string' },
-                  userProfileId: { type: 'string' },
+                  userId: { type: 'string' },
                   audiobookId: { type: 'string' },
                   createdAt: { type: 'string', format: 'date-time' }
                }
@@ -968,7 +910,7 @@ const options: swaggerJsdoc.Options = {
                type: 'object',
                properties: {
                   id: { type: 'string' },
-                  userProfileId: { type: 'string' },
+                  userId: { type: 'string' },
                   chapterId: { type: 'string' },
                   createdAt: { type: 'string', format: 'date-time' },
                   updatedAt: { type: 'string', format: 'date-time' },
@@ -994,7 +936,7 @@ const options: swaggerJsdoc.Options = {
                type: 'object',
                properties: {
                   id: { type: 'string' },
-                  userProfileId: { type: 'string' },
+                  userId: { type: 'string' },
                   name: { type: 'string' },
                   description: { type: 'string', nullable: true },
                   isPublic: { type: 'boolean' },
@@ -1175,30 +1117,6 @@ const options: swaggerJsdoc.Options = {
                   code: { type: 'string', example: 'bn' },
                   createdAt: { type: 'string', format: 'date-time' },
                   updatedAt: { type: 'string', format: 'date-time' },
-               },
-            },
-            AuthorProfile: {
-               type: 'object',
-               properties: {
-                  id: { type: 'string' },
-                  authorId: { type: 'string', example: 'cauthor1234567890abcdefgh' },
-                  avatar: { type: 'string', nullable: true, example: 'https://cdn.example.com/avatar.jpg', description: 'Primary avatar (square_120 variant)' },
-                  discoverable: { type: 'boolean', default: false },
-                  imageAssets: { $ref: '#/components/schemas/ImageAssetsMap' },
-                  createdAt: { type: 'string', format: 'date-time' },
-                  updatedAt: { type: 'string', format: 'date-time' },
-               },
-            },
-            DiscoverableAuthor: {
-               type: 'object',
-               properties: {
-                  authorId: { type: 'string', example: 'cauthor1234567890abcdefgh' },
-                  slug: { type: 'string', example: 'jane-doe-a1b2c3d4' },
-                  firstName: { type: 'string', nullable: true, example: 'Jane' },
-                  lastName: { type: 'string', nullable: true, example: 'Doe' },
-                  avatar: { type: 'string', nullable: true, example: 'https://cdn.example.com/avatar.jpg' },
-                  discoverable: { type: 'boolean', example: true },
-                  imageAssets: { $ref: '#/components/schemas/ImageAssetsMap' },
                },
             },
             PaginatedResponse: {
@@ -1785,14 +1703,6 @@ const options: swaggerJsdoc.Options = {
             description: 'Audiobook star ratings'
          },
          {
-            name: 'OrganizationReviews',
-            description: 'Organization reputation reviews'
-         },
-         {
-            name: 'AuthorReviews',
-            description: 'Author reputation reviews'
-         },
-         {
             name: 'Favorites',
             description: 'User favorite audiobooks'
          },
@@ -1811,10 +1721,6 @@ const options: swaggerJsdoc.Options = {
          {
             name: 'Organizations',
             description: 'Organization catalog and audiobook listings'
-         },
-         {
-            name: 'AuthorProfiles',
-            description: 'App-service author profile (avatar) linked to auth-service Author'
          },
          {
             name: 'Streaming',

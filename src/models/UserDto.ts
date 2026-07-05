@@ -2,46 +2,13 @@
  * User DTO (Data Transfer Object) classes
  * Provides type-safe data structures for API communication
  */
-import { UserProfile as PrismaUserProfile } from '@prisma/client';
 
-// UserProfile DTO for app-local profile information (username, avatar, preferences)
+/** Auth-service public user profile stub for API responses */
 export interface UserProfileDto {
-   id: string;
    userId: string;
    username: string;
-   avatar?: string | undefined;
+   avatar?: string;
    imageAssets?: Record<string, string>;
-   preferences?: any | undefined;
-   createdAt: Date;
-   updatedAt: Date;
-}
-
-export interface CreateUserProfileDto {
-   userId: string;
-   username: string;
-   avatar?: string;
-   preferences?: any;
-}
-
-export interface UpdateUserProfileDto {
-   username?: string;
-   avatar?: string;
-   preferences?: any;
-}
-
-/**
- * Convert Prisma UserProfile to DTO
- */
-export function toUserProfileDto(profile: PrismaUserProfile): UserProfileDto {
-   return {
-      id: profile.id,
-      userId: profile.userId,
-      username: profile.username,
-      avatar: profile.avatar || undefined,
-      preferences: profile.preferences || undefined,
-      createdAt: profile.createdAt,
-      updatedAt: profile.updatedAt
-   };
 }
 
 /**
@@ -59,6 +26,10 @@ export interface UserSession {
  * Request interface with user context
  */
 export interface AuthenticatedRequest {
-   user?: UserProfileDto;
+   user?: {
+      id: string;
+      email?: string;
+      role: string;
+   };
    session?: UserSession;
 }

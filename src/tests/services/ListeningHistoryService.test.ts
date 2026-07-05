@@ -2,12 +2,8 @@
  * ListeningHistoryService Tests
  */
 import { ListeningHistoryService } from '../../services/ListeningHistoryService';
-import { ApiError } from '../../types/ApiError';
 
 const mockPrisma = {
-   userProfile: {
-      findUnique: jest.fn(),
-   },
    listeningHistory: {
       findMany: jest.fn(),
       count: jest.fn(),
@@ -31,14 +27,13 @@ describe('ListeningHistoryService', () => {
       jest.clearAllMocks();
    });
 
-   describe('getListeningHistoryByUserProfileId', () => {
+   describe('getListeningHistoryByUserId', () => {
       it('returns paginated listening history with audiobook details', async () => {
-         mockPrisma.userProfile.findUnique.mockResolvedValue({ id: 'user1' });
          const now = new Date();
          mockPrisma.listeningHistory.findMany.mockResolvedValue([
             {
                id: 'lh1',
-               userProfileId: 'user1',
+               userId: 'user-1',
                audiobookId: 'book1',
                currentPosition: 900,
                completed: false,
@@ -57,7 +52,7 @@ describe('ListeningHistoryService', () => {
          ]);
          mockPrisma.listeningHistory.count.mockResolvedValue(1);
 
-         const result = await service.getListeningHistoryByUserProfileId('user1', {
+         const result = await service.getListeningHistoryByUserId('user-1', {
             page: 1,
             limit: 10,
          });
@@ -68,27 +63,16 @@ describe('ListeningHistoryService', () => {
          expect(result.totalCount).toBe(1);
          expect(mockPrisma.listeningHistory.findMany).toHaveBeenCalledWith(
             expect.objectContaining({
-               where: { userProfileId: 'user1' },
+               where: { userId: 'user-1' },
             })
          );
       });
 
-      it('throws when user profile not found', async () => {
-         mockPrisma.userProfile.findUnique.mockResolvedValue(null);
-
-         await expect(
-            service.getListeningHistoryByUserProfileId('user1', { page: 1, limit: 10 })
-         ).rejects.toBeInstanceOf(ApiError);
-
-         expect(mockPrisma.listeningHistory.findMany).not.toHaveBeenCalled();
-      });
-
       it('filters by audiobookId and completed', async () => {
-         mockPrisma.userProfile.findUnique.mockResolvedValue({ id: 'user1' });
          mockPrisma.listeningHistory.findMany.mockResolvedValue([]);
          mockPrisma.listeningHistory.count.mockResolvedValue(0);
 
-         await service.getListeningHistoryByUserProfileId('user1', {
+         await service.getListeningHistoryByUserId('user-1', {
             audiobookId: 'book1',
             completed: true,
             page: 1,
@@ -98,7 +82,7 @@ describe('ListeningHistoryService', () => {
          expect(mockPrisma.listeningHistory.findMany).toHaveBeenCalledWith(
             expect.objectContaining({
                where: {
-                  userProfileId: 'user1',
+                  userId: 'user-1',
                   audiobookId: 'book1',
                   completed: true,
                },

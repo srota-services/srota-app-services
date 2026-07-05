@@ -27,7 +27,7 @@ describe('PlaybackDto', () => {
          playbackSpeed: 1.0,
          volume: 100,
          audiobookId: 'audiobook-id',
-         userProfileId: 'user-id',
+         userId: 'user-id',
          ...overrides,
       };
       return base;
@@ -36,7 +36,7 @@ describe('PlaybackDto', () => {
    const createMockPlaybackSession = (overrides = {}): PlaybackSession => {
       return {
          id: 'session-id',
-         userProfileId: 'user-id',
+         userId: 'user-id',
          audiobookId: 'audiobook-id',
          currentChapterId: 'chapter-id',
          currentPosition: 300,
@@ -51,7 +51,7 @@ describe('PlaybackDto', () => {
 
    const createMockPlaybackUpdate = (overrides = {}): PlaybackUpdate => {
       return {
-         userProfileId: 'user-id',
+         userId: 'user-id',
          audiobookId: 'audiobook-id',
          chapterId: 'chapter-id',
          position: 600,
@@ -91,7 +91,7 @@ describe('PlaybackDto', () => {
          expect(state.playbackSpeed).toBe(1.0);
          expect(state.volume).toBe(100);
          expect(state.audiobookId).toBe('audiobook-id');
-         expect(state.userProfileId).toBe('user-id');
+         expect(state.userId).toBe('user-id');
       });
 
       it('should handle playing state', () => {
@@ -338,7 +338,7 @@ describe('PlaybackDto', () => {
          const session = createMockPlaybackSession();
 
          expect(session.id).toBe('session-id');
-         expect(session.userProfileId).toBe('user-id');
+         expect(session.userId).toBe('user-id');
          expect(session.audiobookId).toBe('audiobook-id');
          expect(session.currentChapterId).toBe('chapter-id');
          expect(session.currentPosition).toBe(300);

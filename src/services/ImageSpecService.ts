@@ -55,11 +55,6 @@ export class ImageSpecService {
          throw ApiError.validationError('Unable to read image dimensions');
       }
 
-      // Avatar categories: accept any size/ratio; variants are still generated from specs.
-      if (category === 'user' || category === 'author') {
-         return;
-      }
-
       const recommended = await this.getRecommendedMax(category);
       const { width, height } = dimensions;
 

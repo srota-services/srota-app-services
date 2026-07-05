@@ -11,11 +11,11 @@ export function createListeningHistoryRoutes(prisma: PrismaClient): Router {
    const controller = new ListeningHistoryController(prisma);
 
    router.get(
-      '/user/:userProfileId',
-      ValidationMiddleware.validateUserProfileIdParam,
+      '/user/:userId',
+      ValidationMiddleware.validateUserIdParam,
       ValidationMiddleware.validatePagination,
       ValidationMiddleware.sanitizeQueryParams,
-      controller.getListeningHistoryByUserProfileId
+      controller.getListeningHistoryByUserId
    );
 
    return router;

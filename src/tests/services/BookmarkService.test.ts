@@ -13,7 +13,7 @@ jest.mock('../../utils/MessageHandler', () => ({
 }));
 
 describe('BookmarkService chapter-only bookmarks', () => {
-   const userProfileId = 'profile-1';
+   const userId = 'profile-1';
    const chapterId = 'chapter-1';
    const audiobookId = 'audiobook-1';
 
@@ -47,7 +47,7 @@ describe('BookmarkService chapter-only bookmarks', () => {
          prisma.bookmark.findUnique.mockResolvedValue({ id: 'existing-bookmark' });
 
          await expect(
-            service.createBookmark(userProfileId, { chapterId })
+            service.createBookmark(userId, { chapterId })
          ).rejects.toMatchObject({
             statusCode: HttpStatusCode.CONFLICT,
          });
@@ -58,7 +58,7 @@ describe('BookmarkService chapter-only bookmarks', () => {
          prisma.bookmark.findUnique.mockResolvedValue(null);
          prisma.bookmark.create.mockResolvedValue({
             id: 'bookmark-1',
-            userProfileId,
+            userId,
             chapterId,
             createdAt: new Date(),
             updatedAt: new Date(),
@@ -70,7 +70,7 @@ describe('BookmarkService chapter-only bookmarks', () => {
             },
          });
 
-         const result = await service.createBookmark(userProfileId, { chapterId });
+         const result = await service.createBookmark(userId, { chapterId });
 
          expect(result.chapterId).toBe(chapterId);
          expect(result.chapter?.title).toBe('Chapter 1');
@@ -82,12 +82,12 @@ describe('BookmarkService chapter-only bookmarks', () => {
          prisma.bookmark.findMany.mockResolvedValue([]);
          prisma.bookmark.count.mockResolvedValue(0);
 
-         await service.getBookmarks(userProfileId, { audiobookId });
+         await service.getBookmarks(userId, { audiobookId });
 
          expect(prisma.bookmark.findMany).toHaveBeenCalledWith(
             expect.objectContaining({
                where: {
-                  userProfileId,
+                  userId,
                   chapter: { audiobookId },
                },
             })

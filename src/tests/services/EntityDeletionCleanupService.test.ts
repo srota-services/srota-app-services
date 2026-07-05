@@ -15,13 +15,8 @@ jest.mock('../../services/MediaCleanupService', () => ({
 describe('EntityDeletionCleanupService', () => {
    let service: EntityDeletionCleanupService;
    let mockPrisma: {
-      userProfile: { findUnique: jest.Mock; delete: jest.Mock };
-      authorProfile: { findUnique: jest.Mock; delete: jest.Mock };
+      offlineDownload: { findMany: jest.Mock; deleteMany: jest.Mock };
       audioBook: { findMany: jest.Mock };
-      authorReview: { deleteMany: jest.Mock };
-      authorTier: { deleteMany: jest.Mock };
-      organizationReview: { deleteMany: jest.Mock };
-      organizationTier: { deleteMany: jest.Mock };
    };
    let mockDeleteAudiobookWithChapters: jest.Mock;
 
@@ -33,28 +28,12 @@ describe('EntityDeletionCleanupService', () => {
       }));
 
       mockPrisma = attachPrismaTransaction({
-         userProfile: {
-            findUnique: jest.fn(),
-            delete: jest.fn().mockResolvedValue(undefined),
-         },
-         authorProfile: {
-            findUnique: jest.fn(),
-            delete: jest.fn().mockResolvedValue(undefined),
+         offlineDownload: {
+            findMany: jest.fn().mockResolvedValue([]),
+            deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
          },
          audioBook: {
             findMany: jest.fn(),
-         },
-         authorReview: {
-            deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
-         },
-         authorTier: {
-            deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
-         },
-         organizationReview: {
-            deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
-         },
-         organizationTier: {
-            deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
          },
       });
 
@@ -62,32 +41,31 @@ describe('EntityDeletionCleanupService', () => {
    });
 
    describe('cleanupUser', () => {
-      it('deletes user profile and associated media', async () => {
-         mockPrisma.userProfile.findUnique.mockResolvedValue({
-            avatar: 'uploads/images/users/avatar.jpg',
-            offlineDownloads: [{ filePath: 'uploads/downloads/file.mp3' }],
-         });
+      it('deletes offline downloads and associated media', async () => {
+         mockPrisma.offlineDownload.findMany.mockResolvedValue([
+            { filePath: 'uploads/downloads/file.mp3' },
+         ]);
 
          await service.cleanupUser('user-1');
 
-         expect(mockPrisma.userProfile.delete).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
-         expect(mediaCleanupService.deleteStoredFiles).toHaveBeenCalled();
+         expect(mockPrisma.offlineDownload.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+         expect(mediaCleanupService.deleteStoredFiles).toHaveBeenCalledWith(['uploads/downloads/file.mp3']);
       });
 
       it('also runs author cleanup when authorId is provided', async () => {
-         mockPrisma.userProfile.findUnique.mockResolvedValue(null);
-         mockPrisma.authorProfile.findUnique.mockResolvedValue({ avatar: 'uploads/images/authors/av.jpg' });
          mockPrisma.audioBook.findMany.mockResolvedValue([]);
 
          await service.cleanupUser('user-1', 'author-1');
 
-         expect(mockPrisma.authorProfile.delete).toHaveBeenCalledWith({ where: { authorId: 'author-1' } });
+         expect(mockPrisma.audioBook.findMany).toHaveBeenCalledWith({
+            where: { ownerType: 'AUTHOR', ownerId: 'author-1' },
+            select: { id: true },
+         });
       });
    });
 
    describe('cleanupAuthor', () => {
-      it('deletes personal audiobooks by authorId and author profile', async () => {
-         mockPrisma.authorProfile.findUnique.mockResolvedValue({ avatar: 'uploads/images/authors/av.jpg' });
+      it('deletes personal audiobooks by authorId', async () => {
          mockPrisma.audioBook.findMany.mockResolvedValue([{ id: 'book-1' }, { id: 'book-2' }]);
 
          await service.cleanupAuthor('author-1', 'user-1');
@@ -97,9 +75,6 @@ describe('EntityDeletionCleanupService', () => {
             select: { id: true },
          });
          expect(mockDeleteAudiobookWithChapters).toHaveBeenCalledTimes(2);
-         expect(mockPrisma.authorReview.deleteMany).toHaveBeenCalled();
-         expect(mockPrisma.authorTier.deleteMany).toHaveBeenCalledWith({ where: { authorId: 'author-1' } });
-         expect(mockPrisma.authorProfile.delete).toHaveBeenCalledWith({ where: { authorId: 'author-1' } });
       });
    });
 
@@ -114,8 +89,6 @@ describe('EntityDeletionCleanupService', () => {
             select: { id: true },
          });
          expect(mockDeleteAudiobookWithChapters).toHaveBeenCalledWith('book-org-1');
-         expect(mockPrisma.organizationReview.deleteMany).toHaveBeenCalledWith({ where: { organizationId: 'org-1' } });
-         expect(mockPrisma.organizationTier.deleteMany).toHaveBeenCalledWith({ where: { organizationId: 'org-1' } });
       });
    });
 });

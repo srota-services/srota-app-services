@@ -18,6 +18,15 @@ export interface AuthAuthorCatalogInfo {
    userId: string;
    firstName?: string | null;
    lastName?: string | null;
+   avatar?: string | null;
+   imageAssets?: Record<string, string>;
+}
+
+export interface AuthPublicUserProfile {
+   userId: string;
+   username: string;
+   avatar?: string;
+   imageAssets?: Record<string, string>;
 }
 
 export interface AuthOrganizationCatalogInfo {
@@ -137,6 +146,25 @@ export class AuthClient {
             return null;
          }
          console.error('AuthClient.getOrganizationCatalogById failed:', error);
+         throw error;
+      }
+   }
+
+   async getPublicUserProfile(userId: string, accessToken: string): Promise<AuthPublicUserProfile | null> {
+      try {
+         const response = await axios.get<{ profile: AuthPublicUserProfile }>(
+            `${this.baseUrl}/auth/users/${userId}/profile`,
+            {
+               headers: this.authHeaders(accessToken),
+               timeout: 5000,
+            },
+         );
+         return response.data?.profile ?? null;
+      } catch (error) {
+         if (axios.isAxiosError(error) && (error as AxiosError).response?.status === 404) {
+            return null;
+         }
+         console.error('AuthClient.getPublicUserProfile failed:', error);
          throw error;
       }
    }

@@ -12,12 +12,12 @@ import {
    ReviewQueryParams,
    UpdateReviewRequest,
 } from '../models/ReviewDto';
-import { resolveUserProfileId } from '../utils/resolveUserProfileId';
+import { resolveUserId } from '../utils/resolveUserId';
 
 export class ReviewController {
    private reviewService: ReviewService;
 
-   constructor(private prisma: PrismaClient) {
+   constructor(prisma: PrismaClient) {
       this.reviewService = new ReviewService(prisma);
    }
 
@@ -40,9 +40,9 @@ export class ReviewController {
     *         $ref: '#/components/responses/Conflict'
     */
    createReview = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
-      const userProfileId = await resolveUserProfileId(this.prisma, req);
+      const userId = resolveUserId(req);
       const data: CreateReviewRequest = req.body;
-      const review = await this.reviewService.createReview(userProfileId, data);
+      const review = await this.reviewService.createReview(userId, data);
       ResponseHandler.success(res, review, MessageHandler.getSuccessMessage('reviews.created'), 201);
    });
 
@@ -59,7 +59,7 @@ export class ReviewController {
     *         in: query
     *         schema:
     *           type: string
-    *       - name: userProfileId
+    *       - name: userId
     *         in: query
     *         schema:
     *           type: string
@@ -72,7 +72,7 @@ export class ReviewController {
       const limit = req.query['limit'] ? parseInt(req.query['limit'] as string, 10) : 20;
       const query: ReviewQueryParams = {
          audiobookId: req.query['audiobookId'] as string,
-         userProfileId: req.query['userProfileId'] as string,
+         userId: req.query['userId'] as string,
          page,
          limit,
          sortBy: (req.query['sortBy'] as ReviewQueryParams['sortBy']) || 'createdAt',
@@ -137,10 +137,10 @@ export class ReviewController {
     *         $ref: '#/components/responses/Forbidden'
     */
    updateReview = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
-      const userProfileId = await resolveUserProfileId(this.prisma, req);
+      const userId = resolveUserId(req);
       const { id } = req.params as { id: string };
       const data: UpdateReviewRequest = req.body;
-      const review = await this.reviewService.updateReview(id, userProfileId, data);
+      const review = await this.reviewService.updateReview(id, userId, data);
       ResponseHandler.success(res, review, MessageHandler.getSuccessMessage('reviews.updated'));
    });
 
@@ -163,9 +163,9 @@ export class ReviewController {
     *         $ref: '#/components/responses/Forbidden'
     */
    deleteReview = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
-      const userProfileId = await resolveUserProfileId(this.prisma, req);
+      const userId = resolveUserId(req);
       const { id } = req.params as { id: string };
-      await this.reviewService.deleteReview(id, userProfileId);
+      await this.reviewService.deleteReview(id, userId);
       ResponseHandler.success(res, null, MessageHandler.getSuccessMessage('reviews.deleted'));
    });
 }
