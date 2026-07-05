@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { AuthorProfileDto, toAuthorProfileDto, UpdateAuthorProfileDto } from '../models/AuthorProfileDto';
+import { AuthorProfileDto, toAuthorProfileDto, UpdateAuthorProfileDto, DiscoverableAuthorDto } from '../models/AuthorProfileDto';
 import { AuthorCreationMessage } from '../types/author-events';
 import { ApiError } from '../types/ApiError';
 import { MessageHandler } from '../utils/MessageHandler';
@@ -8,6 +8,7 @@ import { fileUrlService } from './FileUrlService';
 import { ImageAssetService } from './ImageAssetService';
 import { mediaCleanupService } from './MediaCleanupService';
 import { emitCacheInvalidation } from './DomainEventPublisher';
+import { authClient } from '../clients/AuthClient';
 import fs from 'fs';
 import { runWrite } from '../utils/prismaTransaction';
 import { AuthorTierService } from './AuthorTierService';
@@ -74,6 +75,59 @@ export class AuthorProfileService {
       emitCacheInvalidation('author-profile', 'created', profile.id, { authorId: message.authorId });
       await this.authorTierService.createDefaultForAuthor(message.authorId);
       return fileUrlService.resolveAuthorProfileMedia(toAuthorProfileDto(profile));
+   }
+
+   async listDiscoverableAuthors(
+      accessToken: string,
+      params: { page?: number; limit?: number } = {},
+   ): Promise<{ authors: DiscoverableAuthorDto[]; totalCount: number }> {
+      const page = Math.max(1, params.page ?? 1);
+      const limit = Math.min(100, Math.max(1, params.limit ?? 10));
+      const skip = (page - 1) * limit;
+
+      const where = { discoverable: true };
+      const [profiles, totalCount] = await Promise.all([
+         this.prisma.authorProfile.findMany({
+            where,
+            skip,
+            take: limit,
+            orderBy: { updatedAt: 'desc' },
+         }),
+         this.prisma.authorProfile.count({ where }),
+      ]);
+
+      const resolvedProfiles = await Promise.all(
+         profiles.map((profile) =>
+            fileUrlService.resolveAuthorProfileMedia(toAuthorProfileDto(profile)),
+         ),
+      );
+
+      const authAuthors = await Promise.all(
+         resolvedProfiles.map((profile) =>
+            authClient.getAuthorCatalogById(profile.authorId, accessToken).catch(() => null),
+         ),
+      );
+
+      const authors: DiscoverableAuthorDto[] = [];
+      for (let index = 0; index < resolvedProfiles.length; index += 1) {
+         const profile = resolvedProfiles[index];
+         const authAuthor = authAuthors[index];
+         if (!profile || !authAuthor) {
+            continue;
+         }
+
+         authors.push({
+            authorId: profile.authorId,
+            slug: authAuthor.slug,
+            firstName: authAuthor.firstName ?? null,
+            lastName: authAuthor.lastName ?? null,
+            avatar: profile.avatar ?? null,
+            discoverable: profile.discoverable ?? true,
+            ...(profile.imageAssets ? { imageAssets: profile.imageAssets } : {}),
+         });
+      }
+
+      return { authors, totalCount };
    }
 
    async getByAuthorId(authorId: string): Promise<AuthorProfileDto> {

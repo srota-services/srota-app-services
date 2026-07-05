@@ -41,6 +41,25 @@ export class AuthorProfileController {
       return author.id;
    }
 
+   listDiscoverableAuthors = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
+      const token = getBearerToken(req);
+      if (!token) {
+         ResponseHandler.unauthorized(res, MessageHandler.getErrorMessage('unauthorized.not_authenticated'));
+         return;
+      }
+
+      const page = req.query['page'] ? parseInt(req.query['page'] as string, 10) : 1;
+      const limit = req.query['limit'] ? parseInt(req.query['limit'] as string, 10) : 10;
+      const result = await this.authorProfileService.listDiscoverableAuthors(token, { page, limit });
+      const pagination = ResponseHandler.calculatePagination(page, limit, result.totalCount);
+      ResponseHandler.paginated(
+         res,
+         result.authors,
+         pagination,
+         MessageHandler.getSuccessMessage('author_profiles.discoverable_retrieved'),
+      );
+   });
+
    getMyProfile = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
       const authorId = await this.resolveCallerAuthorId(req);
       const profile = await this.authorProfileService.getByAuthorId(authorId);

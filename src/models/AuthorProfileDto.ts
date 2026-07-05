@@ -1,3 +1,13 @@
+export interface DiscoverableAuthorDto {
+   authorId: string;
+   slug: string;
+   firstName?: string | null;
+   lastName?: string | null;
+   avatar?: string | null;
+   discoverable: boolean;
+   imageAssets?: Record<string, string>;
+}
+
 export interface AuthorProfileDto {
    id: string;
    authorId: string;
