@@ -5,7 +5,7 @@ import { Favorite as PrismaFavorite } from '@prisma/client';
 
 export interface FavoriteDto {
    id: string;
-   userProfileId: string;
+   userId: string;
    audiobookId: string;
    createdAt: Date;
 }
@@ -25,7 +25,7 @@ export interface FavoriteQueryParams {
 export function toFavoriteDto(favorite: PrismaFavorite): FavoriteDto {
    return {
       id: favorite.id,
-      userProfileId: favorite.userProfileId,
+      userId: favorite.userId,
       audiobookId: favorite.audiobookId,
       createdAt: favorite.createdAt,
    };

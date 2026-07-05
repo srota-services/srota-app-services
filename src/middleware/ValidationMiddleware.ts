@@ -219,18 +219,18 @@ export class ValidationMiddleware {
   }
 
   /**
-   * Validate userProfileId path parameter (CUID)
+   * Validate userId path parameter (auth UUID)
    */
-  static validateUserProfileIdParam(req: Request, res: Response, next: NextFunction): void {
-    const { userProfileId } = req.params;
+  static validateUserIdParam(req: Request, res: Response, next: NextFunction): void {
+    const { userId } = req.params;
 
-    if (!userProfileId || typeof userProfileId !== 'string') {
-      ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.user_profile_id_required'));
+    if (!userId || typeof userId !== 'string') {
+      ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.user_id_required'));
       return;
     }
 
-    const cuidRegex = /^c[a-z0-9]{24}$/;
-    if (!cuidRegex.test(userProfileId)) {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(userId)) {
       ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.id_format'));
       return;
     }
@@ -537,79 +537,6 @@ export class ValidationMiddleware {
   }
 
   /**
-   * Validate user profile update request
-   */
-  static validateUserProfileUpdate(req: Request, res: Response, next: NextFunction): void {
-    const {
-      username,
-      avatar,
-      preferences,
-    } = req.body;
-
-    const allowedFields = [
-      'username',
-      'avatar',
-      'preferences',
-    ];
-    const extraFields = Object.keys(req.body).filter(k => !allowedFields.includes(k));
-    if (extraFields.length > 0) {
-      ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.unexpected_fields'));
-      return;
-    }
-
-    if (username !== undefined) {
-      if (typeof username !== 'string') {
-        ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.username_type'));
-        return;
-      }
-      const trimmed = username.trim();
-      if (trimmed.length < 3 || trimmed.length > 30) {
-        ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.username_length'));
-        return;
-      }
-      const usernameRegex = /^[a-zA-Z0-9_.-]+$/;
-      if (!usernameRegex.test(trimmed)) {
-        ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.username_format'));
-        return;
-      }
-      req.body.username = trimmed;
-    }
-
-    const hasAvatarUpload = Boolean((req as any).avatarFile);
-
-    if (avatar !== undefined && !hasAvatarUpload) {
-      if (typeof avatar !== 'string' || avatar.length > 500) {
-        ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.avatar_url'));
-        return;
-      }
-      try {
-        new URL(avatar);
-      } catch {
-        ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.avatar_url'));
-        return;
-      }
-    }
-
-    if (preferences !== undefined) {
-      if (typeof preferences !== 'object' || Array.isArray(preferences)) {
-        ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.preferences_object'));
-        return;
-      }
-    }
-
-    if (
-      [username, avatar, preferences].every(
-        v => v === undefined
-      ) && !hasAvatarUpload
-    ) {
-      ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.no_update_fields'));
-      return;
-    }
-
-    next();
-  }
-
-  /**
    * Sanitize and normalize query parameters
    */
   static sanitizeQueryParams(req: Request, _res: Response, next: NextFunction): void {
@@ -645,7 +572,7 @@ export class ValidationMiddleware {
    * Validate UserAudioBook creation request
    */
   static validateUserAudioBookCreation(req: Request, res: Response, next: NextFunction): void {
-    const { userProfileId, audiobookId, type } = req.body;
+    const { userId, audiobookId, type } = req.body;
 
     if (type !== undefined) {
       ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.user_audiobook_type_not_settable'));
@@ -653,14 +580,13 @@ export class ValidationMiddleware {
     }
 
     // Validate required fields
-    if (!userProfileId || typeof userProfileId !== 'string') {
-      ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.user_profile_id_required'));
+    if (!userId || typeof userId !== 'string') {
+      ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.user_id_required'));
       return;
     }
 
-    // Validate CUID format for userProfileId
-    const cuidRegex = /^c[a-z0-9]{24}$/;
-    if (!cuidRegex.test(userProfileId)) {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(userId)) {
       ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.id_format'));
       return;
     }
@@ -671,6 +597,7 @@ export class ValidationMiddleware {
     }
 
     // Validate CUID format for audiobookId
+    const cuidRegex = /^c[a-z0-9]{24}$/;
     if (!cuidRegex.test(audiobookId)) {
       ResponseHandler.validationError(res, MessageHandler.getErrorMessage('validation.id_format'));
       return;

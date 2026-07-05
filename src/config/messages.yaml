@@ -60,11 +60,6 @@ success:
     updated: "Author updated successfully"
     deleted: "Author deleted successfully"
 
-  author_profiles:
-    retrieved: "Author profile retrieved successfully"
-    discoverable_retrieved: "Discoverable authors retrieved successfully"
-    updated: "Author profile updated successfully"
-    deleted: "Author profile deleted successfully"
 
   user_audiobooks:
     retrieved: "Your audiobooks retrieved successfully"
@@ -245,7 +240,7 @@ errors:
     file_path_required: "File path is required"
     isbn_format: "Invalid ISBN format"
     audiobook_id_required: "Audiobook is required"
-    user_profile_id_required: "User profile is required"
+    user_id_required: "User ID is required"
     organization_id_required: "Organization is required"
     user_audiobook_type_invalid: "Type must be owned or purchased"
     user_audiobook_type_not_settable: "This type is set automatically and cannot be changed"
@@ -465,11 +460,6 @@ errors:
     user_id_exists: "An author is already linked to this account"
     organization_not_found: "One or more organizations were not found"
 
-  author_profiles:
-    not_found: "Author profile not found"
-    fetch_failed: "Failed to fetch author profile"
-    update_failed: "Failed to update author profile"
-    delete_failed: "Failed to delete author profile"
 
   organizations:
     not_found: "Organization not found"

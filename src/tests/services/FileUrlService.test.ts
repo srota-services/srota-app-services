@@ -108,104 +108,15 @@ describe('FileUrlService', () => {
       });
    });
 
-   describe('resolveUserMedia', () => {
-      it('resolves avatar on user profile DTOs', async () => {
-         const result = await fileUrlService.resolveUserMedia({
-            id: 'user-1',
+   describe('resolveCommentUserMedia', () => {
+      it('resolves avatar on comment user DTOs', async () => {
+         const result = await fileUrlService.resolveCommentUserMedia('user-1', {
+            username: 'jane',
             avatar: 'uploads/images/users/avatar-1.jpg',
          });
 
+         expect(result.username).toBe('jane');
          expect(result.avatar).toBe('https://signed.example/object');
-      });
-   });
-
-   describe('resolveAuthorProfileMedia', () => {
-      it('resolves avatar on author profile DTOs', async () => {
-         const result = await fileUrlService.resolveAuthorProfileMedia({
-            id: 'profile-1',
-            authorId: 'author-1',
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            avatar: 'uploads/images/authors/image-1.jpg',
-         });
-
-         expect(result.avatar).toBe('https://signed.example/object');
-      });
-   });
-
-   describe('resolveAuthorProfileMedia development mode', () => {
-      let existsSyncSpy: jest.SpyInstance;
-
-      afterEach(() => {
-         existsSyncSpy?.mockRestore();
-         jest.resetModules();
-      });
-
-      it('returns local /uploads path when author image exists in app-service storage', async () => {
-         jest.resetModules();
-
-         jest.doMock('../../config/env', () => ({
-            config: {
-               NODE_ENV: 'development',
-               AWS_S3_BUCKET: 'test-bucket',
-               AWS_S3_ENDPOINT: '',
-               AWS_SIGNED_URL_EXPIRES_IN: 3600,
-               DEV_UPLOAD_DIR: './src/uploads',
-               AUTH_SERVICE_URL: 'http://localhost:8080',
-            },
-         }));
-
-         jest.doMock('../../middleware/UploadMiddleware', () => ({
-            getFileUrl: (filePath: string) => `/uploads${filePath.replace('./src/uploads', '')}`,
-         }));
-
-         existsSyncSpy = jest.spyOn(require('fs'), 'existsSync').mockReturnValue(true);
-
-         const { FileUrlService: DevFileUrlService } = require('../../services/FileUrlService');
-         const devFileUrlService = new DevFileUrlService();
-         const result = await devFileUrlService.resolveAuthorProfileMedia({
-            id: 'profile-1',
-            authorId: 'author-1',
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            avatar: '/uploads/images/authors/image-1.jpg',
-         });
-
-         expect(result.avatar).toBe('/uploads/images/authors/image-1.jpg');
-      });
-
-      it('returns AUTH_SERVICE_URL path when image is stored in auth-service only', async () => {
-         jest.resetModules();
-
-         jest.doMock('../../config/env', () => ({
-            config: {
-               NODE_ENV: 'development',
-               AWS_S3_BUCKET: 'test-bucket',
-               AWS_S3_ENDPOINT: '',
-               AWS_SIGNED_URL_EXPIRES_IN: 3600,
-               DEV_UPLOAD_DIR: './src/uploads',
-               AUTH_SERVICE_URL: 'http://localhost:8080',
-            },
-         }));
-
-         jest.doMock('../../middleware/UploadMiddleware', () => ({
-            getFileUrl: (filePath: string) => `/uploads${filePath.replace('./src/uploads', '')}`,
-         }));
-
-         existsSyncSpy = jest.spyOn(require('fs'), 'existsSync').mockReturnValue(false);
-
-         const { FileUrlService: DevFileUrlService } = require('../../services/FileUrlService');
-         const devFileUrlService = new DevFileUrlService();
-         const result = await devFileUrlService.resolveAuthorProfileMedia({
-            id: 'profile-1',
-            authorId: 'author-1',
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            avatar: '/uploads/images/authors/image-1.jpg',
-         });
-
-         expect(result.avatar).toBe('http://localhost:8080/uploads/images/authors/image-1.jpg');
-         expect(existsSyncSpy).toHaveBeenCalled();
       });
    });
 

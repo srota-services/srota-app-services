@@ -3,16 +3,16 @@
  * RabbitMQ consumer for author creation events from auth-service
  */
 import { RabbitMQFactory } from '../config/rabbitmq';
-import { AuthorProfileService } from '../services/AuthorProfileService';
+import { AuthorTierService } from '../services/AuthorTierService';
 import { PrismaClient } from '@prisma/client';
 import { AuthorCreationMessage } from '../types/author-events';
 
 export class AuthorConsumerWorker {
-   private authorProfileService: AuthorProfileService;
+   private authorTierService: AuthorTierService;
    private isRunning = false;
 
    constructor(prisma: PrismaClient) {
-      this.authorProfileService = new AuthorProfileService(prisma);
+      this.authorTierService = new AuthorTierService(prisma);
    }
 
    async start(): Promise<void> {
@@ -53,9 +53,9 @@ export class AuthorConsumerWorker {
 
    private async handleAuthorCreationMessage(message: AuthorCreationMessage): Promise<void> {
       try {
-         console.log(`Processing author profile creation for authorId: ${message.authorId}`);
-         await this.authorProfileService.createFromEvent(message);
-         console.log(`Successfully processed author profile for authorId: ${message.authorId}`);
+         console.log(`Processing author tier creation for authorId: ${message.authorId}`);
+         await this.authorTierService.createDefaultForAuthor(message.authorId);
+         console.log(`Successfully processed author tier for authorId: ${message.authorId}`);
       } catch (_error: unknown) {
          // Error is logged but message is acknowledged (no retry/DLQ as per requirements)
       }

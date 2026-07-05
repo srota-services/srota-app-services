@@ -5,8 +5,6 @@ export type AppDomainResource =
    | 'chapter'
    | 'comment'
    | 'review'
-   | 'user-profile'
-   | 'author-profile'
    | 'playlist'
    | 'playlist-item'
    | 'favorite'

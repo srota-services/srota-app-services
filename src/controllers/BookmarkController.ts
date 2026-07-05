@@ -15,12 +15,12 @@ import {
 } from '../models/BookmarkNoteDto';
 import { ErrorHandler } from '../middleware/ErrorHandler';
 import { MessageHandler } from '../utils/MessageHandler';
-import { resolveUserProfileId } from '../utils/resolveUserProfileId';
+import { resolveUserId } from '../utils/resolveUserId';
 
 export class BookmarkController {
    private bookmarkService: BookmarkService;
 
-   constructor(private prisma: PrismaClient) {
+   constructor(prisma: PrismaClient) {
       this.bookmarkService = new BookmarkService(prisma);
    }
 
@@ -64,10 +64,10 @@ export class BookmarkController {
     *         $ref: '#/components/responses/InternalServerError'
     */
    createBookmark = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
-      const userProfileId = await resolveUserProfileId(this.prisma, req);
+      const userId = resolveUserId(req);
       const bookmarkData: CreateBookmarkRequest = req.body;
 
-      const bookmark = await this.bookmarkService.createBookmark(userProfileId, bookmarkData);
+      const bookmark = await this.bookmarkService.createBookmark(userId, bookmarkData);
 
       ResponseHandler.success(res, bookmark, MessageHandler.getSuccessMessage('bookmarks.created'), 201);
    });
@@ -113,7 +113,7 @@ export class BookmarkController {
     *         $ref: '#/components/responses/InternalServerError'
     */
    getBookmarks = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
-      const userProfileId = await resolveUserProfileId(this.prisma, req);
+      const userId = resolveUserId(req);
       const sortByParam = req.query['sortBy'] as string | undefined;
       const queryParams: BookmarkQueryParams = {
          audiobookId: req.query['audiobookId'] as string,
@@ -124,7 +124,7 @@ export class BookmarkController {
          sortOrder: (req.query['sortOrder'] as 'asc' | 'desc') || 'desc',
       };
 
-      const { bookmarks, totalCount } = await this.bookmarkService.getBookmarks(userProfileId, queryParams);
+      const { bookmarks, totalCount } = await this.bookmarkService.getBookmarks(userId, queryParams);
 
       const pagination = ResponseHandler.calculatePagination(
          queryParams.page!,
@@ -168,9 +168,9 @@ export class BookmarkController {
     */
    getBookmarkById = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
       const { id } = req.params;
-      const userProfileId = await resolveUserProfileId(this.prisma, req);
+      const userId = resolveUserId(req);
 
-      const bookmark = await this.bookmarkService.getBookmarkById(userProfileId, id as string);
+      const bookmark = await this.bookmarkService.getBookmarkById(userId, id as string);
 
       ResponseHandler.success(res, bookmark, MessageHandler.getSuccessMessage('bookmarks.retrieved_by_id'));
    });
@@ -199,9 +199,9 @@ export class BookmarkController {
     */
    deleteBookmark = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
       const { id } = req.params;
-      const userProfileId = await resolveUserProfileId(this.prisma, req);
+      const userId = resolveUserId(req);
 
-      await this.bookmarkService.deleteBookmark(userProfileId, id as string);
+      await this.bookmarkService.deleteBookmark(userId, id as string);
 
       ResponseHandler.noContent(res);
    });

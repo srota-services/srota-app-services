@@ -5,7 +5,7 @@ import { Review as PrismaReview } from '@prisma/client';
 
 export interface ReviewDto {
    id: string;
-   userProfileId: string;
+   userId: string;
    audiobookId: string;
    rating: number;
    createdAt: Date;
@@ -23,7 +23,7 @@ export interface UpdateReviewRequest {
 
 export interface ReviewQueryParams {
    audiobookId?: string;
-   userProfileId?: string;
+   userId?: string;
    page?: number;
    limit?: number;
    sortBy?: 'createdAt' | 'updatedAt' | 'rating';
@@ -33,7 +33,7 @@ export interface ReviewQueryParams {
 export function toReviewDto(review: PrismaReview): ReviewDto {
    return {
       id: review.id,
-      userProfileId: review.userProfileId,
+      userId: review.userId,
       audiobookId: review.audiobookId,
       rating: review.rating,
       createdAt: review.createdAt,

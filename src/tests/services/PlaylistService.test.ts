@@ -40,7 +40,7 @@ describe('PlaylistService ownership', () => {
 
       expect(prisma.playlist.findMany).toHaveBeenCalledWith(
          expect.objectContaining({
-            where: { userProfileId: ownerProfileId },
+            where: { userId: ownerProfileId },
          })
       );
    });
@@ -53,7 +53,7 @@ describe('PlaylistService ownership', () => {
 
       expect(prisma.playlist.findMany).toHaveBeenCalledWith(
          expect.objectContaining({
-            where: { userProfileId: ownerProfileId, isPublic: true },
+            where: { userId: ownerProfileId, isPublic: true },
          })
       );
    });
@@ -61,7 +61,7 @@ describe('PlaylistService ownership', () => {
    it('forbids another user from reading a public playlist by id', async () => {
       prisma.playlist.findUnique.mockResolvedValue({
          id: playlistId,
-         userProfileId: ownerProfileId,
+         userId: ownerProfileId,
          name: 'Shared Name',
          description: null,
          isPublic: true,
@@ -76,7 +76,7 @@ describe('PlaylistService ownership', () => {
    it('forbids another user from listing playlist items', async () => {
       prisma.playlist.findUnique.mockResolvedValue({
          id: playlistId,
-         userProfileId: ownerProfileId,
+         userId: ownerProfileId,
          name: 'Mine',
          description: null,
          isPublic: true,

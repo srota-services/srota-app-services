@@ -28,10 +28,8 @@ function getBearerToken(req: Request): string | undefined {
 export class AudioBookController {
   private audioBookService: AudioBookService;
   private contentAuthorizationService: ContentAuthorizationService;
-  private prisma: PrismaClient;
 
   constructor(prisma: PrismaClient, backgroundJobService?: BackgroundJobService) {
-    this.prisma = prisma;
     this.audioBookService = new AudioBookService(prisma, backgroundJobService);
     this.contentAuthorizationService = new ContentAuthorizationService(prisma);
   }
@@ -168,12 +166,7 @@ export class AudioBookController {
     const authReq = req as AuthenticatedRequest;
     const externalUserId = authReq.user?.id;
     const accessToken = getBearerToken(req);
-    const creatorProfile = externalUserId
-      ? await this.prisma.userProfile.findUnique({
-        where: { userId: externalUserId },
-        select: { id: true }
-      })
-      : null;
+    const creatorUserId = externalUserId ?? undefined;
 
     const allowed = await this.contentAuthorizationService.canCreateAudiobook(
       externalUserId,
@@ -245,7 +238,7 @@ export class AudioBookController {
 
     const audiobook = await this.audioBookService.createAudioBook(
       audiobookData as unknown as CreateAudioBookDto & { tagIds?: string[]; genreIds?: string[] },
-      creatorProfile?.id,
+      creatorUserId,
       accessToken,
       coverImageSourcePath,
     );

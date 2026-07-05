@@ -13,12 +13,11 @@ import { ChapterQueryParams, CreateChapterRequest, UpdateChapterRequest } from '
 import { parseOptionalMinSubscriptionTierFromForm } from '../utils/subscriptionGatingValidation';
 import { ErrorHandler } from '../middleware/ErrorHandler';
 import { MessageHandler } from '../utils/MessageHandler';
-import { ApiError } from '../types/ApiError';
-import { HttpStatusCode, ErrorType } from '../types/common';
 import { AuthenticatedRequest } from '../types/auth';
 import { parsePagesFromBody } from '../utils/audiobookTypeValidation';
 import { AudiobookType } from '@prisma/client';
 import { isGuestRequest } from '../utils/guestCatalogDefaults';
+import { resolveUserId } from '../utils/resolveUserId';
 
 export class ChapterController {
    private chapterService: ChapterService;
@@ -38,30 +37,6 @@ export class ChapterController {
       }
       const token = authorization.slice(7).trim();
       return token.length > 0 ? token : undefined;
-   }
-
-   /** Map JWT auth user id to local UserProfile.id */
-   private async resolveUserProfileId(req: Request): Promise<string> {
-      const authUser = (req as AuthenticatedRequest).user;
-      if (!authUser?.id) {
-         throw new ApiError(
-            MessageHandler.getErrorMessage('unauthorized.not_authenticated'),
-            HttpStatusCode.UNAUTHORIZED,
-            ErrorType.UNAUTHORIZED
-         );
-      }
-      const profile = await this.prisma.userProfile.findUnique({
-         where: { userId: authUser.id },
-         select: { id: true },
-      });
-      if (!profile) {
-         throw new ApiError(
-            MessageHandler.getErrorMessage('not_found.user'),
-            HttpStatusCode.NOT_FOUND,
-            ErrorType.NOT_FOUND
-         );
-      }
-      return profile.id;
    }
 
    private async attachChapterSubscriptionAccess(
@@ -741,9 +716,9 @@ export class ChapterController {
     */
    getChapterProgress = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
       const { id } = req.params;
-      const userProfileId = await this.resolveUserProfileId(req);
+      const userId = resolveUserId(req);
 
-      const progress = await this.chapterService.getChapterProgress(userProfileId, id as string);
+      const progress = await this.chapterService.getChapterProgress(userId, id as string);
 
       ResponseHandler.success(res, progress, MessageHandler.getSuccessMessage('chapters.progress_retrieved'));
    });
@@ -795,10 +770,10 @@ export class ChapterController {
     */
    updateChapterProgress = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
       const { id } = req.params;
-      const userProfileId = await this.resolveUserProfileId(req);
+      const userId = resolveUserId(req);
       const progressData = req.body;
 
-      const progress = await this.chapterService.updateChapterProgress(userProfileId, id as string, progressData);
+      const progress = await this.chapterService.updateChapterProgress(userId, id as string, progressData);
 
       ResponseHandler.success(res, progress, MessageHandler.getSuccessMessage('chapters.progress_updated'));
    });
@@ -836,9 +811,9 @@ export class ChapterController {
     */
    getChapterWithProgress = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
       const { id } = req.params;
-      const userProfileId = await this.resolveUserProfileId(req);
+      const userId = resolveUserId(req);
 
-      const chapterWithProgress = await this.chapterService.getChapterWithProgress(userProfileId, id as string);
+      const chapterWithProgress = await this.chapterService.getChapterWithProgress(userId, id as string);
 
       ResponseHandler.success(res, chapterWithProgress, MessageHandler.getSuccessMessage('chapters.with_progress_retrieved'));
    });
@@ -876,9 +851,9 @@ export class ChapterController {
     */
    getChapterNavigation = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
       const { id } = req.params;
-      const userProfileId = await this.resolveUserProfileId(req);
+      const userId = resolveUserId(req);
 
-      const navigation = await this.chapterService.getChapterNavigation(userProfileId, id as string);
+      const navigation = await this.chapterService.getChapterNavigation(userId, id as string);
 
       ResponseHandler.success(res, navigation, MessageHandler.getSuccessMessage('chapters.navigation_retrieved'));
    });
@@ -918,9 +893,9 @@ export class ChapterController {
     */
    getChaptersWithProgress = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
       const { audiobookId } = req.params;
-      const userProfileId = await this.resolveUserProfileId(req);
+      const userId = resolveUserId(req);
 
-      const chaptersWithProgress = await this.chapterService.getChaptersWithProgress(userProfileId, audiobookId!);
+      const chaptersWithProgress = await this.chapterService.getChaptersWithProgress(userId, audiobookId!);
 
       ResponseHandler.success(res, chaptersWithProgress, MessageHandler.getSuccessMessage('chapters.with_progress_retrieved'));
    });

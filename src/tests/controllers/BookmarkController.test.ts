@@ -10,12 +10,12 @@ import { ResponseHandler } from '../../utils/ResponseHandler';
 import { MessageHandler } from '../../utils/MessageHandler';
 import { ApiError } from '../../types/ApiError';
 import { HttpStatusCode } from '../../types/common';
-import { resolveUserProfileId } from '../../utils/resolveUserProfileId';
+import { resolveUserId } from '../../utils/resolveUserId';
 
 jest.mock('../../services/BookmarkService');
 jest.mock('../../utils/ResponseHandler');
 jest.mock('../../utils/MessageHandler');
-jest.mock('../../utils/resolveUserProfileId');
+jest.mock('../../utils/resolveUserId');
 
 const flushPromises = (): Promise<void> =>
    new Promise<void>((resolve) => setImmediate(resolve));
@@ -27,11 +27,11 @@ describe('BookmarkController', () => {
    let mockRes: any;
    let mockBookmarkService: jest.Mocked<BookmarkService>;
 
-   const userProfileId = 'profile-123';
+   const userId = 'profile-123';
 
    beforeEach(() => {
       mockPrisma = {
-         userProfile: {
+         user: {
             findUnique: jest.fn(),
          },
       } as unknown as PrismaClient;
@@ -50,7 +50,7 @@ describe('BookmarkController', () => {
 
       mockReq.next = jest.fn();
       jest.clearAllMocks();
-      (resolveUserProfileId as jest.Mock).mockResolvedValue(userProfileId);
+      (resolveUserId as jest.Mock).mockReturnValue(userId);
 
       bookmarkController = new BookmarkController(mockPrisma);
       mockBookmarkService = (bookmarkController as any).bookmarkService;
@@ -60,16 +60,16 @@ describe('BookmarkController', () => {
       it('should create chapter bookmark for authenticated user', async () => {
          mockReq.body = { chapterId: 'chapter-123' };
 
-         const mockBookmark = { id: 'bookmark-1', chapterId: 'chapter-123', userProfileId };
+         const mockBookmark = { id: 'bookmark-1', chapterId: 'chapter-123', userId };
          mockBookmarkService.createBookmark.mockResolvedValue(mockBookmark as any);
          (MessageHandler.getSuccessMessage as jest.Mock).mockReturnValue('Bookmark created');
 
          await bookmarkController.createBookmark(mockReq, mockRes, mockReq.next);
          await flushPromises();
 
-         expect(resolveUserProfileId).toHaveBeenCalledWith(mockPrisma, mockReq);
+         expect(resolveUserId).toHaveBeenCalledWith(mockReq);
          expect(mockBookmarkService.createBookmark).toHaveBeenCalledWith(
-            userProfileId,
+            userId,
             mockReq.body
          );
          expect(ResponseHandler.success).toHaveBeenCalledWith(
@@ -108,7 +108,7 @@ describe('BookmarkController', () => {
          await flushPromises();
 
          expect(mockBookmarkService.getBookmarks).toHaveBeenCalledWith(
-            userProfileId,
+            userId,
             expect.objectContaining({
                page: 1,
                limit: 20,
@@ -136,7 +136,7 @@ describe('BookmarkController', () => {
          await flushPromises();
 
          expect(mockBookmarkService.getBookmarks).toHaveBeenCalledWith(
-            userProfileId,
+            userId,
             expect.objectContaining({
                audiobookId: 'audiobook-123',
                chapterId: 'chapter-456',
@@ -153,7 +153,7 @@ describe('BookmarkController', () => {
          await bookmarkController.deleteBookmark(mockReq, mockRes, mockReq.next);
          await flushPromises();
 
-         expect(mockBookmarkService.deleteBookmark).toHaveBeenCalledWith(userProfileId, 'bookmark-123');
+         expect(mockBookmarkService.deleteBookmark).toHaveBeenCalledWith(userId, 'bookmark-123');
          expect(ResponseHandler.noContent).toHaveBeenCalledWith(mockRes);
       });
    });

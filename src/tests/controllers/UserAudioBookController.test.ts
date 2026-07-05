@@ -63,7 +63,7 @@ describe('UserAudioBookController', () => {
       it('creates and returns 201', async () => {
          const mockUserAudioBook = {
             id: 'ua1',
-            userProfileId: 'user1',
+            userId: 'user1',
             audiobookId: 'book1',
             type: UserAudioBookType.PURCHASED,
             createdAt: new Date(),
@@ -71,7 +71,7 @@ describe('UserAudioBookController', () => {
          };
 
          mockReq.body = {
-            userProfileId: 'user1',
+            userId: 'user1',
             audiobookId: 'book1'
          };
 
@@ -81,7 +81,7 @@ describe('UserAudioBookController', () => {
          await userAudioBookController.createUserAudioBook(mockReq, mockRes, mockNext);
 
          expect(mockUserAudioBookService.createUserAudioBook).toHaveBeenCalledWith({
-            userProfileId: 'user1',
+            userId: 'user1',
             audiobookId: 'book1'
          });
          expect(ResponseHandler.success).toHaveBeenCalledWith(
@@ -98,7 +98,7 @@ describe('UserAudioBookController', () => {
          const mockUserAudioBooks = [
             {
                id: 'ua1',
-               userProfileId: 'user1',
+               userId: 'user1',
                audiobookId: 'book1',
                type: UserAudioBookType.OWNED,
                createdAt: new Date(),
@@ -106,7 +106,7 @@ describe('UserAudioBookController', () => {
             },
             {
                id: 'ua2',
-               userProfileId: 'user2',
+               userId: 'user2',
                audiobookId: 'book2',
                type: UserAudioBookType.PURCHASED,
                createdAt: new Date(),
@@ -157,12 +157,12 @@ describe('UserAudioBookController', () => {
       it('returns user-audiobook relationship', async () => {
          const mockUserAudioBook = {
             id: 'ua1',
-            userProfileId: 'user1',
+            userId: 'user1',
             audiobookId: 'book1',
             type: UserAudioBookType.OWNED,
             createdAt: new Date(),
             updatedAt: new Date(),
-            userProfile: {
+            user: {
                id: 'user1',
                userId: 'user-123',
                username: 'testuser',
@@ -210,12 +210,12 @@ describe('UserAudioBookController', () => {
       });
    });
 
-   describe('getUserAudioBooksByUserProfileId', () => {
+   describe('getUserAudioBooksByUserId', () => {
       it('returns user-audiobook relationships for a user', async () => {
          const mockUserAudioBooks = [
             {
                id: 'ua1',
-               userProfileId: 'user1',
+               userId: 'user1',
                audiobookId: 'book1',
                type: UserAudioBookType.OWNED,
                createdAt: new Date(),
@@ -223,16 +223,16 @@ describe('UserAudioBookController', () => {
             }
          ];
 
-         mockReq.params = { userProfileId: 'user1' };
-         mockUserAudioBookService.getUserAudioBooksByUserProfileId.mockResolvedValue({
+         mockReq.params = { userId: 'user1' };
+         mockUserAudioBookService.getUserAudioBooksByUserId.mockResolvedValue({
             userAudioBooks: mockUserAudioBooks as any,
             totalCount: 1
          });
          (MessageHandler.getSuccessMessage as jest.Mock).mockReturnValue('User-audiobook relationships retrieved successfully');
 
-         await userAudioBookController.getUserAudioBooksByUserProfileId(mockReq, mockRes, mockNext);
+         await userAudioBookController.getUserAudioBooksByUserId(mockReq, mockRes, mockNext);
 
-         expect(mockUserAudioBookService.getUserAudioBooksByUserProfileId).toHaveBeenCalledWith('user1', expect.any(Object));
+         expect(mockUserAudioBookService.getUserAudioBooksByUserId).toHaveBeenCalledWith('user1', expect.any(Object));
          expect(ResponseHandler.paginated).toHaveBeenCalled();
       });
    });
@@ -242,7 +242,7 @@ describe('UserAudioBookController', () => {
          const mockUserAudioBooks = [
             {
                id: 'ua1',
-               userProfileId: 'user1',
+               userId: 'user1',
                audiobookId: 'book1',
                type: UserAudioBookType.OWNED,
                createdAt: new Date(),
@@ -269,7 +269,7 @@ describe('UserAudioBookController', () => {
          const mockUserAudioBooks = [
             {
                id: 'ua1',
-               userProfileId: 'user1',
+               userId: 'user1',
                audiobookId: 'book1',
                type: UserAudioBookType.OWNED,
                createdAt: new Date(),

@@ -26,7 +26,7 @@ function getBearerToken(req: Request): string | undefined {
 export class OrganizationReviewController {
   private organizationReviewService: OrganizationReviewService;
 
-  constructor(private prisma: PrismaClient) {
+  constructor(prisma: PrismaClient) {
     this.organizationReviewService = new OrganizationReviewService(prisma);
   }
 
@@ -49,7 +49,7 @@ export class OrganizationReviewController {
    *         $ref: '#/components/responses/Conflict'
    */
   createReview = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const reviewer = await resolveReviewerFromJwt(this.prisma, req);
+    const reviewer = await resolveReviewerFromJwt(req);
     const accessToken = getBearerToken(req);
     if (!accessToken) {
       ResponseHandler.unauthorized(res, MessageHandler.getErrorMessage('unauthorized.not_authenticated'));
@@ -147,7 +147,7 @@ export class OrganizationReviewController {
    *         description: Organization review updated successfully
    */
   updateReview = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const reviewer = await resolveReviewerFromJwt(this.prisma, req);
+    const reviewer = await resolveReviewerFromJwt(req);
     const { id } = req.params as { id: string };
     const data: UpdateOrganizationReviewRequest = req.body;
     const review = await this.organizationReviewService.updateReview(id, reviewer, data);
@@ -167,7 +167,7 @@ export class OrganizationReviewController {
    *         description: Organization review deleted successfully
    */
   deleteReview = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const reviewer = await resolveReviewerFromJwt(this.prisma, req);
+    const reviewer = await resolveReviewerFromJwt(req);
     const { id } = req.params as { id: string };
     await this.organizationReviewService.deleteReview(id, reviewer);
     ResponseHandler.success(res, null, MessageHandler.getSuccessMessage('organization_reviews.deleted'));

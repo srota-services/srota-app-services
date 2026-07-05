@@ -32,13 +32,13 @@ describe('ListeningHistoryController', () => {
       mockService = (controller as any).listeningHistoryService;
    });
 
-   describe('getListeningHistoryByUserProfileId', () => {
+   describe('getListeningHistoryByUserId', () => {
       it('returns paginated listening history', async () => {
          const now = new Date();
          const mockHistory = [
             {
                id: 'lh1',
-               userProfileId: 'user1',
+               userId: 'user1',
                audiobookId: 'book1',
                currentPosition: 120,
                completed: false,
@@ -56,15 +56,15 @@ describe('ListeningHistoryController', () => {
             },
          ];
 
-         mockReq.params = { userProfileId: 'user1' };
-         mockService.getListeningHistoryByUserProfileId.mockResolvedValue({
+         mockReq.params = { userId: 'user1' };
+         mockService.getListeningHistoryByUserId.mockResolvedValue({
             listeningHistory: mockHistory as any,
             totalCount: 1,
          });
 
-         await controller.getListeningHistoryByUserProfileId(mockReq, mockRes, mockNext);
+         await controller.getListeningHistoryByUserId(mockReq, mockRes, mockNext);
 
-         expect(mockService.getListeningHistoryByUserProfileId).toHaveBeenCalledWith(
+         expect(mockService.getListeningHistoryByUserId).toHaveBeenCalledWith(
             'user1',
             expect.objectContaining({
                page: 1,

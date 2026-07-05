@@ -6,7 +6,7 @@ import { UserAudioBook as PrismaUserAudioBook, UserAudioBookType } from '@prisma
 
 export interface UserAudioBookDto {
    id: string;
-   userProfileId: string;
+   userId: string;
    audiobookId: string;
    type: UserAudioBookType;
    progress?: number; // Total seconds listened (sum of chapter currentPosition values)
@@ -15,9 +15,8 @@ export interface UserAudioBookDto {
 }
 
 export interface UserAudioBookWithRelations extends UserAudioBookDto {
-   progress?: number; // Total seconds listened (sum of chapter currentPosition values)
-   userProfile: {
-      id: string;
+   progress?: number;
+   user?: {
       userId: string;
       username: string;
    };
@@ -32,7 +31,7 @@ export interface UserAudioBookWithRelations extends UserAudioBookDto {
 }
 
 export interface CreateUserAudioBookDto {
-   userProfileId: string;
+   userId: string;
    audiobookId: string;
 }
 
@@ -41,19 +40,18 @@ export interface UserAudioBookQueryParams {
    limit?: number;
    sortBy?: string;
    sortOrder?: 'asc' | 'desc';
-   userProfileId?: string;
+   userId?: string;
    audiobookId?: string;
    type?: UserAudioBookType;
 }
 
 /**
  * Convert Prisma UserAudioBook model to UserAudioBookDto
- * Ensures consistent data structure for API responses
  */
 export function toUserAudioBookDto(userAudioBook: PrismaUserAudioBook): UserAudioBookDto {
    return {
       id: userAudioBook.id,
-      userProfileId: userAudioBook.userProfileId,
+      userId: userAudioBook.userId,
       audiobookId: userAudioBook.audiobookId,
       type: userAudioBook.type,
       progress: userAudioBook.progress ?? undefined,
@@ -62,23 +60,28 @@ export function toUserAudioBookDto(userAudioBook: PrismaUserAudioBook): UserAudi
    };
 }
 
+type UserAudioBookWithAudiobook = PrismaUserAudioBook & {
+   audiobook: {
+      id: string;
+      title: string;
+      author: string;
+      narrator: string | null;
+      coverImage: string | null;
+   };
+};
+
 /**
- * Convert Prisma UserAudioBook with relations to UserAudioBookWithRelations
+ * Convert Prisma UserAudioBook with audiobook relation to UserAudioBookWithRelations
  */
-export function toUserAudioBookWithRelations(userAudioBook: any): UserAudioBookWithRelations {
+export function toUserAudioBookWithRelations(userAudioBook: UserAudioBookWithAudiobook): UserAudioBookWithRelations {
    return {
       id: userAudioBook.id,
-      userProfileId: userAudioBook.userProfileId,
+      userId: userAudioBook.userId,
       audiobookId: userAudioBook.audiobookId,
       type: userAudioBook.type,
       progress: userAudioBook.progress ?? undefined,
       createdAt: userAudioBook.createdAt,
       updatedAt: userAudioBook.updatedAt,
-      userProfile: {
-         id: userAudioBook.userProfile.id,
-         userId: userAudioBook.userProfile.userId,
-         username: userAudioBook.userProfile.username,
-      },
       audiobook: {
          id: userAudioBook.audiobook.id,
          title: userAudioBook.audiobook.title,
@@ -88,4 +91,3 @@ export function toUserAudioBookWithRelations(userAudioBook: any): UserAudioBookW
       }
    };
 }
-

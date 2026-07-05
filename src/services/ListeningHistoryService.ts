@@ -7,9 +7,6 @@ import {
    ListeningHistoryWithAudiobookDto,
    toListeningHistoryWithAudiobookDto,
 } from '../models/ListeningHistoryDto';
-import { ApiError } from '../types/ApiError';
-import { MessageHandler } from '../utils/MessageHandler';
-import { HttpStatusCode, ErrorType } from '../types/common';
 import { fileUrlService } from './FileUrlService';
 
 const audiobookSelect = {
@@ -24,29 +21,17 @@ const audiobookSelect = {
 export class ListeningHistoryService {
    constructor(private prisma: PrismaClient) {}
 
-   async getListeningHistoryByUserProfileId(
-      userProfileId: string,
+   async getListeningHistoryByUserId(
+      userId: string,
       query: ListeningHistoryQueryParams
    ): Promise<{ listeningHistory: ListeningHistoryWithAudiobookDto[]; totalCount: number }> {
-      const profile = await this.prisma.userProfile.findUnique({
-         where: { id: userProfileId },
-         select: { id: true },
-      });
-      if (!profile) {
-         throw new ApiError(
-            MessageHandler.getErrorMessage('not_found.user'),
-            HttpStatusCode.NOT_FOUND,
-            ErrorType.NOT_FOUND
-         );
-      }
-
       const page = query.page ?? 1;
       const limit = query.limit ?? 20;
       const skip = (page - 1) * limit;
       const sortBy = query.sortBy ?? 'lastListenedAt';
       const sortOrder = query.sortOrder ?? 'desc';
 
-      const where: Prisma.ListeningHistoryWhereInput = { userProfileId };
+      const where: Prisma.ListeningHistoryWhereInput = { userId };
       if (query.audiobookId) {
          where.audiobookId = query.audiobookId;
       }

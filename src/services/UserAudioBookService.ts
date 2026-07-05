@@ -31,13 +31,13 @@ export class UserAudioBookService {
     */
    async createUserAudioBook(data: CreateUserAudioBookDto): Promise<UserAudioBookDto> {
       try {
-         await this.validateUserProfileAndAudiobook(data.userProfileId, data.audiobookId);
-         await this.assertNoDuplicateRelationship(data.userProfileId, data.audiobookId);
+         await this.validateUserAndAudiobook(data.userId, data.audiobookId);
+         await this.assertNoDuplicateRelationship(data.userId, data.audiobookId);
 
          const created = await runWrite(this.prisma, async (tx) =>
             tx.userAudioBook.create({
                data: {
-                  userProfileId: data.userProfileId,
+                  userId: data.userId,
                   audiobookId: data.audiobookId,
                   type: UserAudioBookType.PURCHASED
                }
@@ -62,14 +62,14 @@ export class UserAudioBookService {
     * Create OWNED relationship when the user creates an audiobook (creator is owner).
     * Skips silently if the relationship already exists.
     */
-   async createOwnedUserAudioBook(userProfileId: string, audiobookId: string): Promise<UserAudioBookDto | null> {
+   async createOwnedUserAudioBook(userId: string, audiobookId: string): Promise<UserAudioBookDto | null> {
       try {
-         await this.validateUserProfileAndAudiobook(userProfileId, audiobookId);
+         await this.validateUserAndAudiobook(userId, audiobookId);
 
          const existing = await this.prisma.userAudioBook.findUnique({
             where: {
-               userProfileId_audiobookId: {
-                  userProfileId,
+               userId_audiobookId: {
+                  userId,
                   audiobookId
                }
             }
@@ -82,7 +82,7 @@ export class UserAudioBookService {
          const created = await runWrite(this.prisma, async (tx) =>
             tx.userAudioBook.create({
                data: {
-                  userProfileId,
+                  userId,
                   audiobookId,
                   type: UserAudioBookType.OWNED
                }
@@ -103,18 +103,7 @@ export class UserAudioBookService {
       }
    }
 
-   private async validateUserProfileAndAudiobook(userProfileId: string, audiobookId: string): Promise<void> {
-      const userProfile = await this.prisma.userProfile.findUnique({
-         where: { id: userProfileId }
-      });
-      if (!userProfile) {
-         throw new ApiError(
-            MessageHandler.getErrorMessage('not_found.user'),
-            HttpStatusCode.NOT_FOUND,
-            ErrorType.NOT_FOUND
-         );
-      }
-
+   private async validateUserAndAudiobook(_userId: string, audiobookId: string): Promise<void> {
       const audiobook = await this.prisma.audioBook.findUnique({
          where: { id: audiobookId }
       });
@@ -127,11 +116,11 @@ export class UserAudioBookService {
       }
    }
 
-   private async assertNoDuplicateRelationship(userProfileId: string, audiobookId: string): Promise<void> {
+   private async assertNoDuplicateRelationship(userId: string, audiobookId: string): Promise<void> {
       const existing = await this.prisma.userAudioBook.findUnique({
          where: {
-            userProfileId_audiobookId: {
-               userProfileId,
+            userId_audiobookId: {
+               userId,
                audiobookId
             }
          }
@@ -163,8 +152,8 @@ export class UserAudioBookService {
          // Build where clause
          const where: Prisma.UserAudioBookWhereInput = {};
 
-         if (queryParams.userProfileId) {
-            where.userProfileId = queryParams.userProfileId;
+         if (queryParams.userId) {
+            where.userId = queryParams.userId;
          }
 
          if (queryParams.audiobookId) {
@@ -205,13 +194,6 @@ export class UserAudioBookService {
          const userAudioBook = await this.prisma.userAudioBook.findUnique({
             where: { id },
             include: {
-               userProfile: {
-                  select: {
-                     id: true,
-                     userId: true,
-                     username: true,
-                  }
-               },
                audiobook: {
                   select: {
                      id: true,
@@ -278,13 +260,13 @@ export class UserAudioBookService {
    /**
     * Get all audiobooks for a specific user
     */
-   async getUserAudioBooksByUserProfileId(
-      userProfileId: string,
+   async getUserAudioBooksByUserId(
+      userId: string,
       queryParams?: UserAudioBookQueryParams
    ): Promise<{ userAudioBooks: UserAudioBookDto[]; totalCount: number }> {
       return this.getAllUserAudioBooks({
          ...queryParams,
-         userProfileId
+         userId
       });
    }
 

@@ -41,8 +41,10 @@ Path prefix: `/api/v1` (mobile: `EXPO_PUBLIC_API_V1_PATH`).
 | Favorites | `/favorites/*` | `services/favorites.ts` | N/A |
 | Bookmarks / notes | `/bookmarks/*`, `/notes/*` | `services/bookmarks.ts`, `services/notes.ts` | N/A |
 | Reviews / comments | `/reviews/*`, `/comments/*` | `services/reviews.ts`, `services/comments.ts` | N/A |
-| Listening history | `/listening-history/*` | `services/listeningHistory.ts` | N/A |
+| Listening history | `/listening-history/*` (uses auth `userId`) | `services/listeningHistory.ts` | N/A |
 | Location | location routes | `services/location.ts` | N/A |
+
+**Removed from app-service (now auth-service):** `/author-profiles/*`, `/user/profile`, `/users/:userId/profile`. Content APIs return `userId` (auth UUID) instead of `userProfileId`.
 
 ---
 

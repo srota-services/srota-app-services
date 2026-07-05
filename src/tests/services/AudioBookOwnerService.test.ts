@@ -74,17 +74,15 @@ describe('AudioBookOwnerService', () => {
       );
    });
 
-   it('hydrates author owner details with avatar from AuthorProfile', async () => {
+   it('hydrates author owner details from auth catalog', async () => {
       (authClient.getAuthorCatalogById as jest.Mock).mockResolvedValue({
          id: 'author-1',
          slug: 'author-one',
          userId: 'user-1',
          firstName: 'Ada',
          lastName: 'Lovelace',
+         avatar: 'uploads/authors/av.jpg',
       });
-      mockPrisma.authorProfile.findMany.mockResolvedValue([
-         { authorId: 'author-1', avatar: 'uploads/authors/av.jpg' },
-      ]);
 
       const [result] = await service.attachOwnerDetails(
          [baseDto({ owner: { type: 'AUTHOR', id: 'author-1' } })],

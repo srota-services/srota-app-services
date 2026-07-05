@@ -27,7 +27,7 @@ function getBearerToken(req: Request): string | undefined {
 export class AuthorReviewController {
   private authorReviewService: AuthorReviewService;
 
-  constructor(private prisma: PrismaClient) {
+  constructor(prisma: PrismaClient) {
     this.authorReviewService = new AuthorReviewService(prisma);
   }
 
@@ -50,7 +50,7 @@ export class AuthorReviewController {
    *         $ref: '#/components/responses/Conflict'
    */
   createReview = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const reviewer = await resolveReviewerFromJwt(this.prisma, req);
+    const reviewer = await resolveReviewerFromJwt(req);
     const accessToken = getBearerToken(req);
     if (!accessToken) {
       ResponseHandler.unauthorized(res, MessageHandler.getErrorMessage('unauthorized.not_authenticated'));
@@ -142,7 +142,7 @@ export class AuthorReviewController {
    *         description: Author review updated successfully
    */
   updateReview = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const reviewer = await resolveReviewerFromJwt(this.prisma, req);
+    const reviewer = await resolveReviewerFromJwt(req);
     const { id } = req.params as { id: string };
     const data: UpdateAuthorReviewRequest = req.body;
     const review = await this.authorReviewService.updateReview(id, reviewer, data);
@@ -162,7 +162,7 @@ export class AuthorReviewController {
    *         description: Author review deleted successfully
    */
   deleteReview = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const reviewer = await resolveReviewerFromJwt(this.prisma, req);
+    const reviewer = await resolveReviewerFromJwt(req);
     const { id } = req.params as { id: string };
     await this.authorReviewService.deleteReview(id, reviewer);
     ResponseHandler.success(res, null, MessageHandler.getSuccessMessage('author_reviews.deleted'));

@@ -10,35 +10,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// UserProfile model for user profile information
-model UserProfile {
-  id        String  @id @default(cuid())
-  userId    String  @unique
-  username  String  @unique
-  avatar    String? // URL to profile picture
-
-  // User preferences
-  preferences Json? // Store user preferences as JSON
-
-  // Timestamps
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  audiobooks          UserAudioBook[]
-  playlists           Playlist[]
-  reviews             Review[]
-  favorites           Favorite[]
-  listeningHistory    ListeningHistory[]
-  chapterProgress     ChapterProgress[]
-  bookmarks           Bookmark[]
-  notes               Note[]
-  offlineDownloads    OfflineDownload[]
-  comments            Comment[]
-
-  @@map("user_profiles")
-}
-
 enum AudioBookOwnerType {
   AUTHOR
   ORGANIZATION
@@ -187,18 +158,6 @@ model Language {
   @@map("languages")
 }
 
-model AuthorProfile {
-  id       String  @id @default(cuid())
-  authorId String  @unique
-  avatar   String?
-  discoverable Boolean @default(false)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("author_profiles")
-}
-
 model OrganizationTier {
   id             String              @id @default(cuid())
   organizationId String              @unique
@@ -269,7 +228,7 @@ model AudioBookGenre {
 // Junction table for user-audiobook relationships (ownership, purchases)
 model UserAudioBook {
   id            String @id @default(cuid())
-  userProfileId String
+  userId String
   audiobookId   String
 
   // Relationship type: OWNED (creator on audiobook create) or PURCHASED (all other cases)
@@ -283,10 +242,9 @@ model UserAudioBook {
   updatedAt DateTime @updatedAt
 
   // Relations
-  userProfile UserProfile @relation(fields: [userProfileId], references: [id], onDelete: Cascade)
   audiobook   AudioBook   @relation(fields: [audiobookId], references: [id], onDelete: Cascade)
 
-  @@unique([userProfileId, audiobookId])
+  @@unique([userId, audiobookId])
   @@map("user_audiobooks")
 }
 
@@ -302,8 +260,7 @@ model Playlist {
   updatedAt DateTime @updatedAt
 
   // Relations
-  userProfileId String
-  userProfile   UserProfile    @relation(fields: [userProfileId], references: [id], onDelete: Cascade)
+  userId String
   items         PlaylistItem[]
 
   @@map("playlists")
@@ -330,7 +287,7 @@ model PlaylistItem {
 // Review model for user reviews (rating only)
 model Review {
   id            String @id @default(cuid())
-  userProfileId String
+  userId String
   audiobookId   String
   rating        Int // 1-5 stars
 
@@ -339,17 +296,16 @@ model Review {
   updatedAt DateTime @updatedAt
 
   // Relations
-  userProfile UserProfile @relation(fields: [userProfileId], references: [id], onDelete: Cascade)
   audiobook   AudioBook   @relation(fields: [audiobookId], references: [id], onDelete: Cascade)
 
-  @@unique([userProfileId, audiobookId])
+  @@unique([userId, audiobookId])
   @@map("reviews")
 }
 
 // Comment model for audiobook discussion with nested replies
 model Comment {
   id            String  @id @default(cuid())
-  userProfileId String
+  userId String
   audiobookId   String
   parentId      String?
   content       String
@@ -360,7 +316,6 @@ model Comment {
   updatedAt DateTime @updatedAt
 
   // Relations
-  userProfile UserProfile @relation(fields: [userProfileId], references: [id], onDelete: Cascade)
   audiobook   AudioBook   @relation(fields: [audiobookId], references: [id], onDelete: Cascade)
   parent      Comment?    @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies     Comment[]   @relation("CommentReplies")
@@ -373,17 +328,16 @@ model Comment {
 // Favorites model for user's favorite audiobooks
 model Favorite {
   id            String @id @default(cuid())
-  userProfileId String
+  userId String
   audiobookId   String
 
   // Timestamps
   createdAt DateTime @default(now())
 
   // Relations
-  userProfile UserProfile @relation(fields: [userProfileId], references: [id], onDelete: Cascade)
   audiobook   AudioBook   @relation(fields: [audiobookId], references: [id], onDelete: Cascade)
 
-  @@unique([userProfileId, audiobookId])
+  @@unique([userId, audiobookId])
   @@map("favorites")
 }
 
@@ -483,7 +437,7 @@ model Page {
 // Chapter progress tracking for individual users
 model ChapterProgress {
   id            String @id @default(cuid())
-  userProfileId String
+  userId String
   chapterId     String
 
   // Progress tracking
@@ -496,26 +450,23 @@ model ChapterProgress {
   updatedAt DateTime @updatedAt
 
   // Relations
-  userProfile UserProfile @relation(fields: [userProfileId], references: [id], onDelete: Cascade)
   chapter     Chapter     @relation(fields: [chapterId], references: [id], onDelete: Cascade)
 
-  @@unique([userProfileId, chapterId])
+  @@unique([userId, chapterId])
   @@map("chapter_progress")
 }
 
 // Bookmarks for chapters (saved chapter per user)
 model Bookmark {
   id            String @id @default(cuid())
-  userProfileId String
+  userId String
   chapterId     String
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  userProfile UserProfile @relation(fields: [userProfileId], references: [id], onDelete: Cascade)
   chapter     Chapter     @relation(fields: [chapterId], references: [id], onDelete: Cascade)
 
-  @@unique([userProfileId, chapterId])
+  @@unique([userId, chapterId])
   @@index([chapterId])
   @@map("bookmarks")
 }
@@ -523,7 +474,7 @@ model Bookmark {
 // Notes for audiobooks and chapters
 model Note {
   id            String  @id @default(cuid())
-  userProfileId String
+  userId String
   audiobookId   String?
   chapterId     String?
 
@@ -539,7 +490,6 @@ model Note {
   updatedAt DateTime   @updatedAt
 
   // Relations
-  userProfile UserProfile @relation(fields: [userProfileId], references: [id], onDelete: Cascade)
   chapter     Chapter?    @relation(fields: [chapterId], references: [id], onDelete: Cascade)
 
   @@map("notes")
@@ -548,7 +498,7 @@ model Note {
 // Offline downloads tracking
 model OfflineDownload {
   id            String @id @default(cuid())
-  userProfileId String
+  userId String
   audiobookId   String
 
   // Download status
@@ -567,17 +517,16 @@ model OfflineDownload {
   completedAt DateTime?
 
   // Relations
-  userProfile UserProfile @relation(fields: [userProfileId], references: [id], onDelete: Cascade)
   audiobook   AudioBook   @relation(fields: [audiobookId], references: [id], onDelete: Cascade)
 
-  @@unique([userProfileId, audiobookId])
+  @@unique([userId, audiobookId])
   @@map("offline_downloads")
 }
 
 // Listening history for tracking user progress
 model ListeningHistory {
   id            String @id @default(cuid())
-  userProfileId String
+  userId String
   audiobookId   String
 
   // Progress tracking
@@ -590,10 +539,9 @@ model ListeningHistory {
   updatedAt DateTime @updatedAt
 
   // Relations
-  userProfile UserProfile @relation(fields: [userProfileId], references: [id], onDelete: Cascade)
   audiobook   AudioBook   @relation(fields: [audiobookId], references: [id], onDelete: Cascade)
 
-  @@unique([userProfileId, audiobookId])
+  @@unique([userId, audiobookId])
   @@map("listening_history")
 }
 
@@ -646,8 +594,6 @@ enum DownloadStatus {
 enum ImageCategory {
   audiobook
   chapter
-  user
-  author
 }
 
 model ImagePlaceholderSpec {

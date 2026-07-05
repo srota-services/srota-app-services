@@ -50,10 +50,6 @@ function keysForResource(
          }
          return keys;
       }
-      case 'user-profile':
-         return [['user-profiles'], ['user-profiles', id], ['user-profiles', 'me']];
-      case 'author-profile':
-         return [['author-profiles'], ['author-profiles', id], ['author-profiles', 'me']];
       case 'playlist': {
          const userId = relatedIds['userId'];
          const keys: string[][] = [['playlists'], ['playlists', id], ['playlists', 'me']];

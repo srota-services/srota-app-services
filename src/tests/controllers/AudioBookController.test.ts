@@ -41,11 +41,7 @@ describe('AudioBookController', () => {
    };
 
    beforeEach(() => {
-      mockPrisma = {
-         userProfile: {
-            findUnique: jest.fn().mockResolvedValue({ id: 'profile-1' })
-         }
-      } as unknown as PrismaClient;
+      mockPrisma = {} as unknown as PrismaClient;
       mockReq = {
          params: {},
          query: {},
@@ -261,7 +257,7 @@ describe('AudioBookController', () => {
                owner: { type: 'ORGANIZATION', id: 'org-1' },
                genreIds: ['genre-123'],
             }),
-            'profile-1',
+            'auth-user-1',
             'test-token',
             '/uploads/covers/cover.jpg',
          );
@@ -307,7 +303,7 @@ describe('AudioBookController', () => {
                title: 'Draft Book',
                type: 'AUTHORING',
             }),
-            'profile-1',
+            'auth-user-1',
             'test-token',
             undefined,
          );
@@ -335,7 +331,7 @@ describe('AudioBookController', () => {
                author: 'Author Name',
                owner: { type: 'ORGANIZATION', id: 'org-1' },
             }),
-            'profile-1',
+            'auth-user-1',
             'test-token',
             '/uploads/covers/cover.jpg',
          );
@@ -383,7 +379,7 @@ describe('AudioBookController', () => {
          );
          expect(mockAudioBookService.createAudioBook).toHaveBeenCalledWith(
             expect.objectContaining({ owner: { type: 'AUTHOR', id: 'author-1' } }),
-            'profile-1',
+            'auth-author-1',
             'test-token',
             '/uploads/covers/cover.jpg',
          );

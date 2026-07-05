@@ -21,7 +21,7 @@ describe('OfflineDownloadDto', () => {
    const createMockOfflineDownloadData = (overrides = {}): OfflineDownloadData => {
       const base: any = {
          id: 'download-id',
-         userProfileId: 'user-id',
+         userId: 'user-id',
          audiobookId: 'audiobook-id',
          status: DownloadStatus.PENDING,
          progress: 0,
@@ -79,7 +79,7 @@ describe('OfflineDownloadDto', () => {
          const download = createMockOfflineDownloadData();
 
          expect(download.id).toBe('download-id');
-         expect(download.userProfileId).toBe('user-id');
+         expect(download.userId).toBe('user-id');
          expect(download.audiobookId).toBe('audiobook-id');
          expect(download.status).toBe(DownloadStatus.PENDING);
          expect(download.progress).toBe(0);
@@ -393,14 +393,14 @@ describe('OfflineDownloadDto', () => {
    describe('DownloadJobData', () => {
       it('should create valid DownloadJobData', () => {
          const jobData: DownloadJobData = {
-            userProfileId: 'user-id',
+            userId: 'user-id',
             audiobookId: 'audiobook-id',
             downloadId: 'download-id',
             quality: 'high',
             retryCount: 0,
          };
 
-         expect(jobData.userProfileId).toBe('user-id');
+         expect(jobData.userId).toBe('user-id');
          expect(jobData.audiobookId).toBe('audiobook-id');
          expect(jobData.downloadId).toBe('download-id');
          expect(jobData.quality).toBe('high');
@@ -409,7 +409,7 @@ describe('OfflineDownloadDto', () => {
 
       it('should handle optional fields', () => {
          const jobData: DownloadJobData = {
-            userProfileId: 'user-id',
+            userId: 'user-id',
             audiobookId: 'audiobook-id',
             downloadId: 'download-id',
          };

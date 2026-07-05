@@ -833,7 +833,7 @@ const options: swaggerJsdoc.Options = {
                type: 'object',
                properties: {
                   id: { type: 'string' },
-                  userProfileId: { type: 'string' },
+                  userId: { type: 'string' },
                   audiobookId: { type: 'string' },
                   parentId: { type: 'string', nullable: true },
                   content: { type: 'string' },
@@ -868,7 +868,7 @@ const options: swaggerJsdoc.Options = {
                type: 'object',
                properties: {
                   id: { type: 'string' },
-                  userProfileId: { type: 'string' },
+                  userId: { type: 'string' },
                   audiobookId: { type: 'string' },
                   rating: { type: 'integer', minimum: 1, maximum: 5 },
                   createdAt: { type: 'string', format: 'date-time' },
@@ -952,7 +952,7 @@ const options: swaggerJsdoc.Options = {
                type: 'object',
                properties: {
                   id: { type: 'string' },
-                  userProfileId: { type: 'string' },
+                  userId: { type: 'string' },
                   audiobookId: { type: 'string' },
                   createdAt: { type: 'string', format: 'date-time' }
                }
@@ -968,7 +968,7 @@ const options: swaggerJsdoc.Options = {
                type: 'object',
                properties: {
                   id: { type: 'string' },
-                  userProfileId: { type: 'string' },
+                  userId: { type: 'string' },
                   chapterId: { type: 'string' },
                   createdAt: { type: 'string', format: 'date-time' },
                   updatedAt: { type: 'string', format: 'date-time' },
@@ -994,7 +994,7 @@ const options: swaggerJsdoc.Options = {
                type: 'object',
                properties: {
                   id: { type: 'string' },
-                  userProfileId: { type: 'string' },
+                  userId: { type: 'string' },
                   name: { type: 'string' },
                   description: { type: 'string', nullable: true },
                   isPublic: { type: 'boolean' },
@@ -1175,30 +1175,6 @@ const options: swaggerJsdoc.Options = {
                   code: { type: 'string', example: 'bn' },
                   createdAt: { type: 'string', format: 'date-time' },
                   updatedAt: { type: 'string', format: 'date-time' },
-               },
-            },
-            AuthorProfile: {
-               type: 'object',
-               properties: {
-                  id: { type: 'string' },
-                  authorId: { type: 'string', example: 'cauthor1234567890abcdefgh' },
-                  avatar: { type: 'string', nullable: true, example: 'https://cdn.example.com/avatar.jpg', description: 'Primary avatar (square_120 variant)' },
-                  discoverable: { type: 'boolean', default: false },
-                  imageAssets: { $ref: '#/components/schemas/ImageAssetsMap' },
-                  createdAt: { type: 'string', format: 'date-time' },
-                  updatedAt: { type: 'string', format: 'date-time' },
-               },
-            },
-            DiscoverableAuthor: {
-               type: 'object',
-               properties: {
-                  authorId: { type: 'string', example: 'cauthor1234567890abcdefgh' },
-                  slug: { type: 'string', example: 'jane-doe-a1b2c3d4' },
-                  firstName: { type: 'string', nullable: true, example: 'Jane' },
-                  lastName: { type: 'string', nullable: true, example: 'Doe' },
-                  avatar: { type: 'string', nullable: true, example: 'https://cdn.example.com/avatar.jpg' },
-                  discoverable: { type: 'boolean', example: true },
-                  imageAssets: { $ref: '#/components/schemas/ImageAssetsMap' },
                },
             },
             PaginatedResponse: {
@@ -1811,10 +1787,6 @@ const options: swaggerJsdoc.Options = {
          {
             name: 'Organizations',
             description: 'Organization catalog and audiobook listings'
-         },
-         {
-            name: 'AuthorProfiles',
-            description: 'App-service author profile (avatar) linked to auth-service Author'
          },
          {
             name: 'Streaming',

@@ -18,12 +18,12 @@ export class ListeningHistoryController {
 
    /**
     * @swagger
-    * /api/v1/listening-history/user/{userProfileId}:
+    * /api/v1/listening-history/user/{userId}:
     *   get:
     *     summary: Get listening history for a user
     *     tags: [ListeningHistory]
     *     parameters:
-    *       - name: userProfileId
+    *       - name: userId
     *         in: path
     *         required: true
     *         schema:
@@ -54,9 +54,9 @@ export class ListeningHistoryController {
     *       404:
     *         $ref: '#/components/responses/NotFound'
     */
-   getListeningHistoryByUserProfileId = ErrorHandler.asyncHandler(
+   getListeningHistoryByUserId = ErrorHandler.asyncHandler(
       async (req: Request, res: Response): Promise<void> => {
-         const { userProfileId } = req.params as { userProfileId: string };
+         const { userId } = req.params as { userId: string };
          const page = req.query['page'] ? parseInt(req.query['page'] as string, 10) : 1;
          const limit = req.query['limit'] ? parseInt(req.query['limit'] as string, 10) : 20;
 
@@ -84,8 +84,8 @@ export class ListeningHistoryController {
             query.completed = completed;
          }
 
-         const result = await this.listeningHistoryService.getListeningHistoryByUserProfileId(
-            userProfileId,
+         const result = await this.listeningHistoryService.getListeningHistoryByUserId(
+            userId,
             query
          );
 

@@ -29,7 +29,7 @@ export class OfflineDownloadService {
    /**
     * Request an offline download
     */
-   async requestDownload(userProfileId: string, downloadRequest: DownloadRequest): Promise<OfflineDownloadData> {
+   async requestDownload(userId: string, downloadRequest: DownloadRequest): Promise<OfflineDownloadData> {
       try {
          // Check if audiobook exists and is available for offline download
          const audiobook = await this.prisma.audioBook.findUnique({
@@ -47,8 +47,8 @@ export class OfflineDownloadService {
          // Check if user already has a download for this audiobook
          const existingDownload = await this.prisma.offlineDownload.findUnique({
             where: {
-               userProfileId_audiobookId: {
-                  userProfileId,
+               userId_audiobookId: {
+                  userId,
                   audiobookId: downloadRequest.audiobookId,
                },
             },
@@ -68,7 +68,7 @@ export class OfflineDownloadService {
          const download = await runWrite(this.prisma, async (tx) =>
             tx.offlineDownload.create({
                data: {
-                  userProfileId,
+                  userId,
                   audiobookId: downloadRequest.audiobookId,
                   status: 'PENDING',
                   progress: 0,
@@ -78,7 +78,7 @@ export class OfflineDownloadService {
 
          // Schedule download job
          await this.backgroundJobService.scheduleOfflineDownload(
-            userProfileId,
+            userId,
             downloadRequest.audiobookId,
             download.id,
             downloadRequest.quality
@@ -87,7 +87,7 @@ export class OfflineDownloadService {
          emitCacheInvalidation('offline-download', 'created', download.id);
          return {
             id: download.id,
-            userProfileId: download.userProfileId,
+            userId: download.userId,
             audiobookId: download.audiobookId,
             status: download.status,
             progress: download.progress,
@@ -110,12 +110,12 @@ export class OfflineDownloadService {
    /**
     * Get download progress
     */
-   async getDownloadProgress(userProfileId: string, downloadId: string): Promise<DownloadProgress> {
+   async getDownloadProgress(userId: string, downloadId: string): Promise<DownloadProgress> {
       try {
          const download = await this.prisma.offlineDownload.findFirst({
             where: {
                id: downloadId,
-               userProfileId,
+               userId,
             },
             include: {
                audiobook: {
@@ -140,7 +140,7 @@ export class OfflineDownloadService {
 
          const downloadData = {
             id: download.id,
-            userProfileId: download.userProfileId,
+            userId: download.userId,
             audiobookId: download.audiobookId,
             status: download.status,
             progress: download.progress,
@@ -176,9 +176,9 @@ export class OfflineDownloadService {
    /**
     * Get all downloads for a user
     */
-   async getUserDownloads(userProfileId: string, status?: DownloadStatus): Promise<OfflineDownloadWithRelations[]> {
+   async getUserDownloads(userId: string, status?: DownloadStatus): Promise<OfflineDownloadWithRelations[]> {
       try {
-         const whereClause: any = { userProfileId };
+         const whereClause: any = { userId };
          if (status) {
             whereClause.status = status;
          }
@@ -209,7 +209,7 @@ export class OfflineDownloadService {
    private async mapOfflineDownloadWithRelations(
       download: {
          id: string;
-         userProfileId: string;
+         userId: string;
          audiobookId: string;
          status: DownloadStatus;
          progress: number;
@@ -237,7 +237,7 @@ export class OfflineDownloadService {
 
       return {
          id: download.id,
-         userProfileId: download.userProfileId,
+         userId: download.userId,
          audiobookId: download.audiobookId,
          status: download.status,
          progress: download.progress,
@@ -263,12 +263,12 @@ export class OfflineDownloadService {
    /**
     * Cancel a download
     */
-   async cancelDownload(userProfileId: string, downloadId: string): Promise<void> {
+   async cancelDownload(userId: string, downloadId: string): Promise<void> {
       try {
          const download = await this.prisma.offlineDownload.findFirst({
             where: {
                id: downloadId,
-               userProfileId,
+               userId,
             },
          });
 
@@ -303,12 +303,12 @@ export class OfflineDownloadService {
    /**
     * Delete a completed download
     */
-   async deleteDownload(userProfileId: string, downloadId: string): Promise<void> {
+   async deleteDownload(userId: string, downloadId: string): Promise<void> {
       try {
          const download = await this.prisma.offlineDownload.findFirst({
             where: {
                id: downloadId,
-               userProfileId,
+               userId,
             },
          });
 
@@ -343,12 +343,12 @@ export class OfflineDownloadService {
    /**
     * Retry a failed download
     */
-   async retryDownload(userProfileId: string, downloadId: string): Promise<void> {
+   async retryDownload(userId: string, downloadId: string): Promise<void> {
       try {
          const download = await this.prisma.offlineDownload.findFirst({
             where: {
                id: downloadId,
-               userProfileId,
+               userId,
             },
          });
 
@@ -379,7 +379,7 @@ export class OfflineDownloadService {
 
          // Schedule retry
          await this.backgroundJobService.scheduleOfflineDownload(
-            userProfileId,
+            userId,
             download.audiobookId,
             downloadId,
             undefined,

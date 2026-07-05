@@ -11,7 +11,7 @@ export interface PlaybackState {
    volume: number; // 0-100
    currentChapterId?: string;
    audiobookId: string;
-   userProfileId: string;
+   userId: string;
 }
 
 // Playback sync request - combines play, pause, and seek functionality
@@ -58,7 +58,7 @@ export interface ChapterNavigationRequest {
 // Playback session data
 export interface PlaybackSession {
    id: string;
-   userProfileId: string;
+   userId: string;
    audiobookId: string;
    currentChapterId?: string;
    currentPosition: number;
@@ -71,7 +71,7 @@ export interface PlaybackSession {
 
 // Real-time playback update
 export interface PlaybackUpdate {
-   userProfileId: string;
+   userId: string;
    audiobookId: string;
    chapterId?: string;
    position: number;

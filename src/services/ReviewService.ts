@@ -28,7 +28,7 @@ export class ReviewService {
       }
    }
 
-   async createReview(userProfileId: string, data: CreateReviewRequest): Promise<ReviewDto> {
+   async createReview(userId: string, data: CreateReviewRequest): Promise<ReviewDto> {
       this.validateRating(data.rating);
 
       const audiobook = await this.prisma.audioBook.findUnique({
@@ -44,8 +44,8 @@ export class ReviewService {
 
       const existing = await this.prisma.review.findUnique({
          where: {
-            userProfileId_audiobookId: {
-               userProfileId,
+            userId_audiobookId: {
+               userId,
                audiobookId: data.audiobookId,
             },
          },
@@ -61,7 +61,7 @@ export class ReviewService {
       const review = await runWrite(this.prisma, async (tx) =>
          tx.review.create({
             data: {
-               userProfileId,
+               userId,
                audiobookId: data.audiobookId,
                rating: data.rating,
             },
@@ -81,7 +81,7 @@ export class ReviewService {
 
       const where: Prisma.ReviewWhereInput = {};
       if (query.audiobookId) where.audiobookId = query.audiobookId;
-      if (query.userProfileId) where.userProfileId = query.userProfileId;
+      if (query.userId) where.userId = query.userId;
 
       const [reviews, totalCount] = await Promise.all([
          this.prisma.review.findMany({
@@ -113,7 +113,7 @@ export class ReviewService {
 
    async updateReview(
       id: string,
-      userProfileId: string,
+      userId: string,
       data: UpdateReviewRequest
    ): Promise<ReviewDto> {
       this.validateRating(data.rating);
@@ -126,7 +126,7 @@ export class ReviewService {
             ErrorType.NOT_FOUND
          );
       }
-      if (existing.userProfileId !== userProfileId) {
+      if (existing.userId !== userId) {
          throw ApiError.forbidden(MessageHandler.getErrorMessage('reviews.access_denied'));
       }
 
@@ -141,7 +141,7 @@ export class ReviewService {
       return toReviewDto(updated);
    }
 
-   async deleteReview(id: string, userProfileId: string): Promise<void> {
+   async deleteReview(id: string, userId: string): Promise<void> {
       const existing = await this.prisma.review.findUnique({ where: { id } });
       if (!existing) {
          throw new ApiError(
@@ -150,7 +150,7 @@ export class ReviewService {
             ErrorType.NOT_FOUND
          );
       }
-      if (existing.userProfileId !== userProfileId) {
+      if (existing.userId !== userId) {
          throw ApiError.forbidden(MessageHandler.getErrorMessage('reviews.access_denied'));
       }
 

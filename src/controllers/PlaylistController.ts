@@ -14,12 +14,12 @@ import {
    UpdatePlaylistItemRequest,
    UpdatePlaylistRequest,
 } from '../models/PlaylistDto';
-import { resolveUserProfileId } from '../utils/resolveUserProfileId';
+import { resolveUserId } from '../utils/resolveUserId';
 
 export class PlaylistController {
    private playlistService: PlaylistService;
 
-   constructor(private prisma: PrismaClient) {
+   constructor(prisma: PrismaClient) {
       this.playlistService = new PlaylistService(prisma);
    }
 
@@ -40,9 +40,9 @@ export class PlaylistController {
     *         description: Playlist created successfully
     */
    createPlaylist = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
-      const userProfileId = await resolveUserProfileId(this.prisma, req);
+      const userId = resolveUserId(req);
       const data: CreatePlaylistRequest = req.body;
-      const playlist = await this.playlistService.createPlaylist(userProfileId, data);
+      const playlist = await this.playlistService.createPlaylist(userId, data);
       ResponseHandler.success(res, playlist, MessageHandler.getSuccessMessage('playlists.created'), 201);
    });
 
@@ -65,7 +65,7 @@ export class PlaylistController {
     *         description: Playlists retrieved successfully
     */
    getPlaylists = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
-      const userProfileId = await resolveUserProfileId(this.prisma, req);
+      const userId = resolveUserId(req);
       const isPublicParam = req.query['isPublic'];
       const page = req.query['page'] ? parseInt(req.query['page'] as string, 10) : 1;
       const limit = req.query['limit'] ? parseInt(req.query['limit'] as string, 10) : 20;
@@ -80,7 +80,7 @@ export class PlaylistController {
       } else if (isPublicParam === 'false') {
          query.isPublic = false;
       }
-      const result = await this.playlistService.getPlaylists(userProfileId, query);
+      const result = await this.playlistService.getPlaylists(userId, query);
       const pagination = ResponseHandler.calculatePagination(page, limit, result.totalCount);
       ResponseHandler.paginated(
          res,
@@ -111,9 +111,9 @@ export class PlaylistController {
     *         $ref: '#/components/responses/NotFound'
     */
    getPlaylistById = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
-      const userProfileId = await resolveUserProfileId(this.prisma, req);
+      const userId = resolveUserId(req);
       const { id } = req.params as { id: string };
-      const playlist = await this.playlistService.getPlaylistById(id, userProfileId);
+      const playlist = await this.playlistService.getPlaylistById(id, userId);
       ResponseHandler.success(res, playlist, MessageHandler.getSuccessMessage('playlists.retrieved_by_id'));
    });
 
@@ -140,10 +140,10 @@ export class PlaylistController {
     *         description: Playlist updated successfully
     */
    updatePlaylist = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
-      const userProfileId = await resolveUserProfileId(this.prisma, req);
+      const userId = resolveUserId(req);
       const { id } = req.params as { id: string };
       const data: UpdatePlaylistRequest = req.body;
-      const playlist = await this.playlistService.updatePlaylist(id, userProfileId, data);
+      const playlist = await this.playlistService.updatePlaylist(id, userId, data);
       ResponseHandler.success(res, playlist, MessageHandler.getSuccessMessage('playlists.updated'));
    });
 
@@ -164,9 +164,9 @@ export class PlaylistController {
     *         description: Playlist deleted successfully
     */
    deletePlaylist = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
-      const userProfileId = await resolveUserProfileId(this.prisma, req);
+      const userId = resolveUserId(req);
       const { id } = req.params as { id: string };
-      await this.playlistService.deletePlaylist(id, userProfileId);
+      await this.playlistService.deletePlaylist(id, userId);
       ResponseHandler.success(res, null, MessageHandler.getSuccessMessage('playlists.deleted'));
    });
 
@@ -193,10 +193,10 @@ export class PlaylistController {
     *         description: Playlist item created successfully
     */
    addPlaylistItem = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
-      const userProfileId = await resolveUserProfileId(this.prisma, req);
+      const userId = resolveUserId(req);
       const { id } = req.params as { id: string };
       const data: CreatePlaylistItemRequest = req.body;
-      const item = await this.playlistService.addPlaylistItem(id, userProfileId, data);
+      const item = await this.playlistService.addPlaylistItem(id, userId, data);
       ResponseHandler.success(res, item, MessageHandler.getSuccessMessage('playlist_items.created'), 201);
    });
 
@@ -217,9 +217,9 @@ export class PlaylistController {
     *         description: Playlist items retrieved successfully
     */
    getPlaylistItems = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
-      const userProfileId = await resolveUserProfileId(this.prisma, req);
+      const userId = resolveUserId(req);
       const { id } = req.params as { id: string };
-      const items = await this.playlistService.getPlaylistItems(id, userProfileId);
+      const items = await this.playlistService.getPlaylistItems(id, userId);
       ResponseHandler.success(res, items, MessageHandler.getSuccessMessage('playlist_items.retrieved'));
    });
 
@@ -251,10 +251,10 @@ export class PlaylistController {
     *         description: Playlist item updated successfully
     */
    updatePlaylistItem = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
-      const userProfileId = await resolveUserProfileId(this.prisma, req);
+      const userId = resolveUserId(req);
       const { id, itemId } = req.params as { id: string; itemId: string };
       const data: UpdatePlaylistItemRequest = req.body;
-      const item = await this.playlistService.updatePlaylistItem(id, itemId, userProfileId, data);
+      const item = await this.playlistService.updatePlaylistItem(id, itemId, userId, data);
       ResponseHandler.success(res, item, MessageHandler.getSuccessMessage('playlist_items.updated'));
    });
 
@@ -280,9 +280,9 @@ export class PlaylistController {
     *         description: Playlist item deleted successfully
     */
    deletePlaylistItem = ErrorHandler.asyncHandler(async (req: Request, res: Response): Promise<void> => {
-      const userProfileId = await resolveUserProfileId(this.prisma, req);
+      const userId = resolveUserId(req);
       const { id, itemId } = req.params as { id: string; itemId: string };
-      await this.playlistService.deletePlaylistItem(id, itemId, userProfileId);
+      await this.playlistService.deletePlaylistItem(id, itemId, userId);
       ResponseHandler.success(res, null, MessageHandler.getSuccessMessage('playlist_items.deleted'));
    });
 }

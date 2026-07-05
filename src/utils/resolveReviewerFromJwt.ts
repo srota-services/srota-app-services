@@ -1,6 +1,5 @@
 import { ReviewerType } from '@prisma/client';
 import { Request } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { authClient } from '../clients/AuthClient';
 import { ApiError } from '../types/ApiError';
 import { AuthenticatedRequest } from '../types/auth';
@@ -12,7 +11,7 @@ import {
   normalizeAuthRole,
 } from '../constants/authRoles';
 import { MessageHandler } from './MessageHandler';
-import { resolveUserProfileId } from './resolveUserProfileId';
+import { resolveUserId } from './resolveUserId';
 import { ResolvedReviewer } from '../types/reviewer';
 
 function getBearerToken(req: Request): string | undefined {
@@ -24,10 +23,7 @@ function getBearerToken(req: Request): string | undefined {
   return token.length > 0 ? token : undefined;
 }
 
-export async function resolveReviewerFromJwt(
-  prisma: PrismaClient,
-  req: Request,
-): Promise<ResolvedReviewer> {
+export async function resolveReviewerFromJwt(req: Request): Promise<ResolvedReviewer> {
   const authReq = req as AuthenticatedRequest;
   const role = authReq.user?.role;
 
@@ -41,8 +37,7 @@ export async function resolveReviewerFromJwt(
     normalizedRole === normalizeAuthRole(AuthRole.LISTENER) ||
     normalizedRole === normalizeAuthRole(AuthRole.GLOBAL_ADMIN)
   ) {
-    const userProfileId = await resolveUserProfileId(prisma, req);
-    return { type: ReviewerType.USER, id: userProfileId };
+    return { type: ReviewerType.USER, id: resolveUserId(req) };
   }
 
   if (normalizedRole === normalizeAuthRole(AuthRole.AUTHOR)) {

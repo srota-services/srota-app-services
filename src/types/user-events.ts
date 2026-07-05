@@ -38,7 +38,7 @@ export interface UsernameGenerationResult {
  */
 export interface UserProfileCreationResult {
    success: boolean;
-   userProfile?: {
+   user?: {
       id: string;
       userId: string;
       username: string;

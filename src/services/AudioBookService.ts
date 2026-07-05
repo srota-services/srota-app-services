@@ -343,7 +343,7 @@ export class AudioBookService {
    */
   async createAudioBook(
     data: CreateAudioBookDto & { tagIds?: string[]; genreIds?: string[] },
-    ownerUserProfileId?: string,
+    ownerUserId?: string,
     accessToken?: string,
     coverImageSourcePath?: string,
   ): Promise<AudioBookDto> {
@@ -506,9 +506,9 @@ export class AudioBookService {
       }
 
       // Creator owns the audiobook when they have a user profile (skipped for admins without a profile)
-      if (ownerUserProfileId) {
+      if (ownerUserId) {
         const userAudioBookService = new UserAudioBookService(this.prisma);
-        await userAudioBookService.createOwnedUserAudioBook(ownerUserProfileId, audiobook.id);
+        await userAudioBookService.createOwnedUserAudioBook(ownerUserId, audiobook.id);
       }
 
       emitCacheInvalidation('audiobook', 'created', audiobook.id);
@@ -717,7 +717,7 @@ export class AudioBookService {
   /**
    * Recalculate and store user-audiobook progress (total seconds listened across chapters).
    */
-  async updateAudiobookProgress(id: string, userProfileId: string): Promise<AudioBookDto> {
+  async updateAudiobookProgress(id: string, userId: string): Promise<AudioBookDto> {
     try {
       // Verify audiobook exists
       const audiobook = await this.prisma.audioBook.findUnique({
@@ -729,11 +729,11 @@ export class AudioBookService {
       }
 
       const chapterService = new ChapterService(this.prisma);
-      const progressSeconds = await chapterService.calculateAudiobookProgress(userProfileId, id);
+      const progressSeconds = await chapterService.calculateAudiobookProgress(userId, id);
 
       const existingUserAudioBook = await this.prisma.userAudioBook.findUnique({
         where: {
-          userProfileId_audiobookId: { userProfileId, audiobookId: id },
+          userId_audiobookId: { userId, audiobookId: id },
         },
         select: { progress: true },
       });
@@ -745,8 +745,8 @@ export class AudioBookService {
       await runWrite(this.prisma, async (tx) =>
         tx.userAudioBook.upsert({
           where: {
-            userProfileId_audiobookId: {
-              userProfileId,
+            userId_audiobookId: {
+              userId,
               audiobookId: id
             }
           },
@@ -754,7 +754,7 @@ export class AudioBookService {
             progress: storedProgress
           },
           create: {
-            userProfileId,
+            userId,
             audiobookId: id,
             type: UserAudioBookType.PURCHASED,
             progress: storedProgress
@@ -1197,18 +1197,10 @@ export class AudioBookService {
       return null;
     }
 
-    const profile = await this.prisma.userProfile.findUnique({
-      where: { userId: externalUserId },
-      select: { id: true },
-    });
-    if (!profile) {
-      return null;
-    }
-
     const review = await this.prisma.review.findUnique({
       where: {
-        userProfileId_audiobookId: {
-          userProfileId: profile.id,
+        userId_audiobookId: {
+          userId: externalUserId,
           audiobookId,
         },
       },
